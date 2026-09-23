@@ -1,0 +1,83 @@
+---
+import '../styles/global.css';
+import { agentSource } from '../lib/agent-responses';
+
+interface Props {
+  title?: string;
+}
+
+const { title } = Astro.props;
+const source = agentSource();
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title ? `${title} · Preguntas ML` : 'Preguntas ML · Repuestos Roma'}</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a href="/" class="brand">
+          <span class="logo" aria-hidden="true">?</span>
+          <span>Repuestos Roma <strong>· Preguntas ML</strong></span>
+        </a>
+        <span class="source" title="Origen de los estados del agente">
+          Agente:{' '}
+          {source === 'repuestos' && 'API repuestos'}
+          {source === 'mock' && 'datos simulados'}
+          {source === 'none' && 'sin conectar'}
+        </span>
+      </div>
+    </header>
+    <main class="container">
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style>
+  .topbar {
+    background: var(--brand);
+    color: var(--brand-contrast);
+    border-bottom: 3px solid var(--accent);
+  }
+  .topbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 56px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: inherit;
+    font-size: 16px;
+    text-decoration: none !important;
+  }
+  .logo {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--brand);
+    font-weight: 800;
+  }
+  .source {
+    font-size: 13px;
+    opacity: 0.85;
+    white-space: nowrap;
+  }
+  main { padding-block: 20px 48px; }
+  @media (max-width: 560px) {
+    .source { display: none; }
+  }
+</style>

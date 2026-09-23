@@ -1,0 +1,327 @@
+---
+import Layout from '../layouts/Layout.astro';
+import QuestionCard from '../components/QuestionCard.astro';
+import { ML_CONNECTION_ID } from 'astro:env/server';
+import { ApiError, getConnections, listQuestions } from '../lib/ml-api';
+import {
+  AGENT_STATUSES,
+  AGENT_STATUS_META,
+  agentSource,
+  agentStatusOf,
+  getAgentResponses,
+  isAgentStatus,
+} from '../lib/agent-responses';
+import { dayToIso } from '../lib/format';
+import type { AgentStatus, Connection, QuestionsList } from '../lib/types';
+
+const PAGE_SIZE = 50;
+const params = Astro.url.searchParams;
+
+const status = params.get('status') ?? 'UNANSWERED';
+const sort = params.get('sort') === 'asc' ? 'asc' : 'desc';
+const from = params.get('from') ?? '';
+const to = params.get('to') ?? '';
+const agentParam = params.get('agent');
+const agentFilter: AgentStatus | null = isAgentStatus(agentParam) ? agentParam : null;
+const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+
+let connections: Connection[] = [];
+let data: QuestionsList | null = null;
+let error: string | null = null;
+let loginUrl: string | null = null;
+let connectionId: number | undefined;
+
+try {
+  const conn = await getConnections();
+  connections = conn.connections;
+  loginUrl = conn.login_url;
+
+  const requested = Number(params.get('connection')) || Number(ML_CONNECTION_ID);
+  connectionId = connections.find((c) => c.id === requested)?.id ?? connections[0]?.id;
+
+  if (connectionId) {
+    data = await listQuestions({
+      connection_id: connectionId,
+      status: status === 'ALL' ? undefined : status,
+      sort,
+      from_date: dayToIso(from),
+      to_date: dayToIso(to, true),
+      offset: (page - 1) * PAGE_SIZE,
+      limit: PAGE_SIZE,
+    });
+  }
+} catch (err) {
+  error = err instanceof ApiError ? err.message : 'Error inesperado al consultar la API.';
+  if (err instanceof ApiError) {
+    loginUrl = (err.body as { login_url?: string } | null)?.login_url ?? loginUrl;
+  }
+  console.error('[index]', err);
+}
+
+const questions = data?.questions ?? [];
+const agentMap = await getAgentResponses(questions.map((q) => q.id));
+
+const counts = Object.fromEntries(AGENT_STATUSES.map((s) => [s, 0])) as Record<AgentStatus, number>;
+for (const q of questions) counts[agentStatusOf(agentMap, q.id)]++;
+
+const visible = agentFilter ? questions.filter((q) => agentStatusOf(agentMap, q.id) === agentFilter) : questions;
+
+const total = data?.total ?? 0;
+const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+function hrefWith(changes: Record<string, string | number | null>) {
+  const u = new URL(Astro.url);
+  for (const [k, v] of Object.entries(changes)) {
+    if (v === null || v === '') u.searchParams.delete(k);
+    else u.searchParams.set(k, String(v));
+  }
+  return `${u.pathname}${u.search}`;
+}
+
+const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.user_id}`;
+---
+
+<Layout>
+  <div class="head">
+    <div>
+      <h1>Preguntas de clientes</h1>
+      <p class="muted">
+        {data ? `${total} preguntas en Mercado Libre` : 'Mercado Libre'}
+        {agentSource() === 'none' && ' · estados del agente disponibles en la fase 2'}
+      </p>
+    </div>
+    <a href={Astro.url.pathname + Astro.url.search} class="btn">↻ Actualizar</a>
+  </div>
+
+  {
+    error && (
+      <div class="alert alert-error" role="alert">
+        <strong>No se pudieron cargar las preguntas.</strong> {error}
+      </div>
+    )
+  }
+
+  {
+    !error && connections.length === 0 && (
+      <div class="alert alert-info">
+        No hay cuentas de Mercado Libre conectadas.
+        {loginUrl && (
+          <>
+            {' '}Conectá una desde <a href={loginUrl} target="_blank" rel="noopener">{loginUrl}</a>.
+          </>
+        )}
+      </div>
+    )
+  }
+
+  <section class="stats" aria-label="Resumen por estado del agente">
+    {
+      AGENT_STATUSES.map((s) => (
+        <a
+          href={hrefWith({ agent: agentFilter === s ? null : s })}
+          class:list={['card', 'stat', s, { active: agentFilter === s }]}
+          title={AGENT_STATUS_META[s].hint}
+        >
+          <span class="stat-label">{AGENT_STATUS_META[s].label}</span>
+          <span class="stat-value">{counts[s]}</span>
+          <span class="stat-hint">{AGENT_STATUS_META[s].hint}</span>
+        </a>
+      ))
+    }
+  </section>
+
+  <form method="get" class="card filters">
+    {
+      connections.length > 1 && (
+        <label>
+          Cuenta
+          <select name="connection">
+            {connections.map((c) => (
+              <option value={c.id} selected={c.id === connectionId}>
+                {connectionName(c)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )
+    }
+    {connections.length === 1 && <input type="hidden" name="connection" value={connectionId} />}
+
+    <label>
+      Estado ML
+      <select name="status">
+        <option value="UNANSWERED" selected={status === 'UNANSWERED'}>Sin responder</option>
+        <option value="ANSWERED" selected={status === 'ANSWERED'}>Respondidas</option>
+        <option value="ALL" selected={status === 'ALL'}>Todas</option>
+      </select>
+    </label>
+
+    <label>
+      Agente
+      <select name="agent">
+        <option value="">Todos</option>
+        {
+          AGENT_STATUSES.map((s) => (
+            <option value={s} selected={agentFilter === s}>
+              {AGENT_STATUS_META[s].label}
+            </option>
+          ))
+        }
+      </select>
+    </label>
+
+    <label>
+      Desde
+      <input type="date" name="from" value={from} />
+    </label>
+    <label>
+      Hasta
+      <input type="date" name="to" value={to} />
+    </label>
+
+    <label>
+      Orden
+      <select name="sort">
+        <option value="desc" selected={sort === 'desc'}>Más nuevas</option>
+        <option value="asc" selected={sort === 'asc'}>Más viejas</option>
+      </select>
+    </label>
+
+    <div class="filter-actions">
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+      <a href="/" class="btn">Limpiar</a>
+    </div>
+  </form>
+
+  {
+    (from || to || agentFilter) && data && (
+      <p class="muted note">
+        Los filtros de fecha y de agente se aplican sobre la página actual ({questions.length} de {total}).
+      </p>
+    )
+  }
+
+  <section class="list">
+    {
+      visible.map((q) => (
+        <QuestionCard
+          question={q}
+          agentStatus={agentStatusOf(agentMap, q.id)}
+          agent={agentMap.get(q.id)}
+          connectionId={connectionId}
+        />
+      ))
+    }
+    {data && visible.length === 0 && <div class="card empty muted">No hay preguntas para estos filtros.</div>}
+  </section>
+
+  {
+    data && totalPages > 1 && (
+      <nav class="pager" aria-label="Paginación">
+        <a class="btn" href={hrefWith({ page: page - 1 })} aria-disabled={page <= 1 ? 'true' : undefined}>
+          ← Anterior
+        </a>
+        <span class="muted">
+          Página {page} de {totalPages}
+        </span>
+        <a class="btn" href={hrefWith({ page: page + 1 })} aria-disabled={page >= totalPages ? 'true' : undefined}>
+          Siguiente →
+        </a>
+      </nav>
+    )
+  }
+</Layout>
+
+<script>
+  // Al cambiar un filtro se vuelve a la página 1 (el form no envía "page").
+  document.querySelectorAll<HTMLSelectElement>('form.filters select').forEach((el) =>
+    el.addEventListener('change', () => el.form?.requestSubmit()),
+  );
+</script>
+
+<style>
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  h1 { margin: 0; font-size: 24px; }
+  .head p { margin: 2px 0 0; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px;
+    color: var(--text);
+    text-decoration: none !important;
+    border-top: 4px solid var(--c);
+    transition: transform 0.1s;
+  }
+  .stat:hover { transform: translateY(-1px); }
+  .stat.active { outline: 2px solid var(--c); }
+  .stat.si { --c: var(--si); }
+  .stat.no { --c: var(--no); }
+  .stat.inseguro { --c: var(--inseguro); }
+  .stat.sin_evaluar { --c: var(--sin); }
+  .stat-label { font-weight: 600; color: var(--c); }
+  .stat-value { font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .stat-hint { font-size: 12px; color: var(--text-muted); }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .filters select,
+  .filters input {
+    font: inherit;
+    font-size: 14px;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    min-width: 140px;
+  }
+  .filter-actions { display: flex; gap: 8px; margin-left: auto; }
+  .note { font-size: 13px; margin: 0 0 10px; }
+
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .empty { padding: 32px; text-align: center; }
+
+  .pager {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  @media (max-width: 760px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .stat-hint { display: none; }
+    .filters label { flex: 1 1 140px; }
+    .filters select, .filters input { min-width: 0; width: 100%; }
+    .filter-actions { margin-left: 0; width: 100%; }
+    .filter-actions .btn { flex: 1; justify-content: center; }
+  }
+</style>

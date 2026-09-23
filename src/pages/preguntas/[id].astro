@@ -1,0 +1,241 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AgentBadge from '../../components/AgentBadge.astro';
+import { ApiError, getQuestion } from '../../lib/ml-api';
+import { AGENT_STATUS_META, agentSource, agentStatusOf, getAgentResponses } from '../../lib/agent-responses';
+import { formatDate, formatPrice, ML_STATUS_LABEL } from '../../lib/format';
+import type { QuestionDetailResponse } from '../../lib/types';
+
+const { id = '' } = Astro.params;
+if (!/^\d+$/.test(id)) return Astro.redirect('/');
+
+const connectionParam = Number(Astro.url.searchParams.get('connection')) || undefined;
+
+let detail: QuestionDetailResponse | null = null;
+let error: string | null = null;
+try {
+  detail = await getQuestion(id, connectionParam);
+} catch (err) {
+  error = err instanceof ApiError ? err.message : 'Error inesperado al consultar la API.';
+  if (err instanceof ApiError && err.status === 404) Astro.response.status = 404;
+  console.error('[pregunta]', err);
+}
+
+const q = detail?.question;
+const item = detail?.item;
+const pub = detail?.publication;
+const agentMap = q ? await getAgentResponses([q.id]) : new Map();
+const agent = q ? agentMap.get(q.id) : undefined;
+const agentStatus = q ? agentStatusOf(agentMap, q.id) : 'sin_evaluar';
+
+const image = item?.pictures?.[0]?.secure_url ?? item?.secure_thumbnail ?? pub?.thumbnail ?? null;
+const attributes = (item?.attributes ?? []).filter((a) => a.value_name);
+const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
+---
+
+<Layout title={q ? `Pregunta ${q.id}` : 'Pregunta'}>
+  <a href={backHref} class="back">← Volver a preguntas</a>
+
+  {error && <div class="alert alert-error" role="alert"><strong>No se pudo cargar la pregunta.</strong> {error}</div>}
+
+  {
+    q && (
+      <div class="grid">
+        <div class="main">
+          <section class="card block">
+            <div class="meta muted">
+              <span class:list={['ml-status', { answered: q.status === 'ANSWERED' }]}>
+                {ML_STATUS_LABEL[q.status] ?? q.status}
+              </span>
+              <span>· {formatDate(q.date_created)}</span>
+              {q.from?.nickname && <span>· {q.from.nickname}</span>}
+              <span>· #{q.id}</span>
+            </div>
+            <h1 class="question">{q.text}</h1>
+
+            {q.answer?.text ? (
+              <div class="answer">
+                <div class="label">Respuesta publicada en ML · {formatDate(q.answer.date_created)}</div>
+                <p>{q.answer.text}</p>
+              </div>
+            ) : (
+              <p class="muted">Todavía no tiene respuesta publicada en Mercado Libre.</p>
+            )}
+          </section>
+
+          <section class:list={['card', 'block', 'agent', agentStatus]}>
+            <div class="agent-head">
+              <h2>Respuesta del agente</h2>
+              <AgentBadge status={agentStatus} size="md" />
+            </div>
+            <p class="muted hint">{AGENT_STATUS_META[agentStatus].hint}.</p>
+
+            {agent ? (
+              <>
+                {agent.answer_text && <blockquote>{agent.answer_text}</blockquote>}
+                <dl>
+                  {agent.confidence != null && (
+                    <>
+                      <dt>Confianza</dt>
+                      <dd>{Math.round(agent.confidence * 100)}%</dd>
+                    </>
+                  )}
+                  {agent.reasoning && (
+                    <>
+                      <dt>Razonamiento</dt>
+                      <dd>{agent.reasoning}</dd>
+                    </>
+                  )}
+                  <dt>Registrada</dt>
+                  <dd>{formatDate(agent.created_at)}</dd>
+                  {agent.reviewed_by && (
+                    <>
+                      <dt>Revisada por</dt>
+                      <dd>
+                        {agent.reviewed_by} · {formatDate(agent.reviewed_at)}
+                      </dd>
+                    </>
+                  )}
+                </dl>
+                {agentStatus === 'inseguro' && (
+                  <div class="hitl">
+                    <button class="btn btn-primary" type="button" disabled title="Disponible en la fase 2">
+                      Aprobar y publicar
+                    </button>
+                    <button class="btn" type="button" disabled title="Disponible en la fase 2">
+                      Editar respuesta
+                    </button>
+                    <span class="muted">La aprobación humana se habilita en la fase 2.</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p class="muted">
+                {agentSource() === 'none'
+                  ? 'La API de repuestos aún no está conectada (fase 2).'
+                  : 'No hay registro del agente para esta pregunta.'}
+              </p>
+            )}
+          </section>
+        </div>
+
+        <aside class="card block item">
+          <h2>Publicación</h2>
+          {image && <img src={image} alt={item?.title ?? pub?.title ?? ''} />}
+          <h3>
+            {item?.permalink || pub?.permalink ? (
+              <a href={item?.permalink ?? pub?.permalink} target="_blank" rel="noopener">
+                {item?.title ?? pub?.title ?? q.item_id}
+              </a>
+            ) : (
+              (item?.title ?? pub?.title ?? q.item_id)
+            )}
+          </h3>
+          <p class="price">{formatPrice(item?.price ?? pub?.price, item?.currency_id ?? pub?.currency_id)}</p>
+          <dl class="facts">
+            {item?.available_quantity != null && (
+              <>
+                <dt>Stock</dt>
+                <dd>{item.available_quantity}</dd>
+              </>
+            )}
+            {item?.sold_quantity != null && (
+              <>
+                <dt>Vendidos</dt>
+                <dd>{item.sold_quantity}</dd>
+              </>
+            )}
+            {item?.condition && (
+              <>
+                <dt>Condición</dt>
+                <dd>{item.condition === 'new' ? 'Nuevo' : item.condition === 'used' ? 'Usado' : item.condition}</dd>
+              </>
+            )}
+            {(item?.status ?? pub?.status) && (
+              <>
+                <dt>Estado</dt>
+                <dd>{item?.status ?? pub?.status}</dd>
+              </>
+            )}
+          </dl>
+
+          {attributes.length > 0 && (
+            <details open={attributes.length <= 12}>
+              <summary>Características ({attributes.length})</summary>
+              <dl class="facts attrs">
+                {attributes.map((a) => (
+                  <>
+                    <dt>{a.name}</dt>
+                    <dd>{a.value_name}</dd>
+                  </>
+                ))}
+              </dl>
+            </details>
+          )}
+        </aside>
+      </div>
+    )
+  }
+</Layout>
+
+<style>
+  .back { display: inline-block; margin-bottom: 14px; }
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 16px;
+    align-items: start;
+  }
+  .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .block { padding: 18px 20px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+  .ml-status { font-weight: 700; text-transform: uppercase; font-size: 12px; color: var(--inseguro); }
+  .ml-status.answered { color: var(--si); }
+  .question { font-size: 22px; margin: 8px 0 16px; overflow-wrap: anywhere; }
+  .answer {
+    border-left: 3px solid var(--si);
+    background: var(--surface-2);
+    padding: 10px 14px;
+    border-radius: 0 8px 8px 0;
+  }
+  .answer p { margin: 4px 0 0; }
+  .label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+
+  .agent { border-top: 4px solid var(--c, var(--sin)); }
+  .agent.si { --c: var(--si); }
+  .agent.no { --c: var(--no); }
+  .agent.inseguro { --c: var(--inseguro); }
+  .agent-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  h2 { margin: 0; font-size: 17px; }
+  .hint { margin: 4px 0 12px; font-size: 14px; }
+  blockquote {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border-radius: 8px;
+    border-left: 3px solid var(--c, var(--sin));
+  }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+  dt { color: var(--text-muted); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  .hitl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; font-size: 13px; }
+  .hitl .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .item img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 8px;
+    margin: 12px 0;
+  }
+  .item h3 { font-size: 15px; margin: 0 0 4px; }
+  .price { font-size: 22px; font-weight: 700; margin: 0 0 12px; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+  .attrs { font-size: 13px; }
+
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>

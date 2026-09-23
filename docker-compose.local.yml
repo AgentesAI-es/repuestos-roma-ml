@@ -1,0 +1,5 @@
+# Override sólo para desarrollo local: publica el puerto en el host.
+services:
+  web:
+    ports:
+      - "${APP_PORT:-4321}:4321"

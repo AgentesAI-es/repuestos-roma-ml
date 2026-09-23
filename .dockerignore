@@ -1,0 +1,11 @@
+node_modules
+dist
+.astro
+.env
+.env.*
+!.env.example
+.git
+.claude
+Dockerfile
+docker-compose*.yml
+README.md

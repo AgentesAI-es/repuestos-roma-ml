@@ -1,0 +1,123 @@
+---
+import AgentBadge from './AgentBadge.astro';
+import { formatDate, formatPrice, timeAgo, ML_STATUS_LABEL } from '../lib/format';
+import type { AgentResponse, AgentStatus, QuestionListItem } from '../lib/types';
+
+interface Props {
+  question: QuestionListItem;
+  agentStatus: AgentStatus;
+  agent?: AgentResponse;
+  connectionId?: number;
+}
+
+const { question: q, agentStatus, agent, connectionId } = Astro.props;
+const pub = q.publication;
+const detailHref = `/preguntas/${q.id}${connectionId ? `?connection=${connectionId}` : ''}`;
+const answered = q.status === 'ANSWERED';
+---
+
+<article class="card q">
+  <div class="thumb">
+    {pub?.thumbnail ? <img src={pub.thumbnail} alt="" loading="lazy" /> : <span aria-hidden="true">📦</span>}
+  </div>
+
+  <div class="body">
+    <div class="meta">
+      <span class:list={['ml-status', { answered }]}>{ML_STATUS_LABEL[q.status] ?? q.status}</span>
+      <span class="muted" title={formatDate(q.date_created)}>{timeAgo(q.date_created)}</span>
+      {q.from?.nickname && <span class="muted">· {q.from.nickname}</span>}
+    </div>
+
+    <a href={detailHref} class="text">{q.text}</a>
+
+    {
+      pub && (
+        <div class="pub muted">
+          {pub.permalink ? (
+            <a href={pub.permalink} target="_blank" rel="noopener">{pub.title ?? pub.item_id}</a>
+          ) : (
+            <span>{pub.title ?? q.item_id}</span>
+          )}
+          {pub.price != null && <span> · {formatPrice(pub.price, pub.currency_id)}</span>}
+        </div>
+      )
+    }
+
+    {
+      q.answer?.text ? (
+        <p class="reply">
+          <span class="reply-label">Respuesta publicada:</span> {q.answer.text}
+        </p>
+      ) : agent?.answer_text ? (
+        <p class="reply proposed">
+          <span class="reply-label">Propuesta del agente:</span> {agent.answer_text}
+        </p>
+      ) : null
+    }
+  </div>
+
+  <div class="side">
+    <AgentBadge status={agentStatus} />
+    <a href={detailHref} class="btn detail">Ver detalle</a>
+  </div>
+</article>
+
+<style>
+  .q {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 14px;
+    padding: 14px;
+    align-items: start;
+  }
+  .thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    font-size: 24px;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  .body { min-width: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; align-items: center; }
+  .ml-status {
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--inseguro);
+  }
+  .ml-status.answered { color: var(--si); }
+  .text {
+    display: block;
+    margin: 4px 0;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .pub { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pub a { color: inherit; }
+  .reply {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border-left: 3px solid var(--si);
+    background: var(--surface-2);
+    border-radius: 0 6px 6px 0;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .reply.proposed { border-left-color: var(--inseguro); }
+  .reply-label { font-weight: 600; color: var(--text-muted); }
+  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .detail { font-size: 13px; padding: 6px 10px; }
+
+  @media (max-width: 640px) {
+    .q { grid-template-columns: 48px 1fr; }
+    .thumb { width: 48px; height: 48px; }
+    .side { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; }
+  }
+</style>

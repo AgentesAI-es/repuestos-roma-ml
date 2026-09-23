@@ -1,0 +1,31 @@
+# Despliegue en Dokploy (tipo "Docker Compose").
+# - Las variables se cargan desde la pestaña "Environment" de Dokploy (se guardan en .env).
+# - El dominio se asigna en la pestaña "Domains" apuntando al puerto 4321 del servicio "web";
+#   Dokploy/Traefik enruta por la red interna, por eso no se publican puertos en el host.
+# - Para probar en local: docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "4321"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4321
+      ML_API_URL: ${ML_API_URL:-https://ml-repuestosroma.agentesai.es}
+      ML_API_TOKEN: ${ML_API_TOKEN:?Definí ML_API_TOKEN}
+      ML_CONNECTION_ID: ${ML_CONNECTION_ID:-}
+      REPUESTOS_API_URL: ${REPUESTOS_API_URL:-}
+      REPUESTOS_API_TOKEN: ${REPUESTOS_API_TOKEN:-}
+      AGENT_MOCK: ${AGENT_MOCK:-false}
+      DASHBOARD_USER: ${DASHBOARD_USER:-}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4321/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
