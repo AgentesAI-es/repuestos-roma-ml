@@ -3,16 +3,15 @@
 Panel en Astro (SSR, Node) para ver las preguntas de clientes de Mercado Libre y el estado del agente que las responde.
 
 - **Fase 1 (esto):** listado y detalle de preguntas desde la API de ML (`ml-repuestosroma.agentesai.es`), con el lugar reservado para el estado del agente.
-- **Fase 2:** conectar la API de repuestos (tabla de respuestas / human in the loop) y habilitar aprobar/editar las respuestas "Inseguro".
+- **Fase 2:** conectar la API de repuestos (tabla de respuestas / human in the loop) y habilitar aprobar/editar las respuestas que requieren revisión.
 
 ## Estados del agente
 
-| Estado        | Significado                                             |
-| ------------- | ------------------------------------------------------- |
-| `si`          | Respuesta positiva, publicada sin intervención humana   |
-| `no`          | Respuesta negativa, publicada sin intervención humana   |
-| `inseguro`    | Pendiente de aprobación humana                          |
-| `sin_evaluar` | (sólo UI) no hay registro del agente para esa pregunta  |
+| Estado         | Significado                                            |
+| -------------- | ------------------------------------------------------ |
+| `revision`     | La respuesta requiere supervisión humana               |
+| `sin_revision` | La respuesta no requiere supervisión humana            |
+| `sin_evaluar`  | (sólo UI) no hay registro del agente para esa pregunta |
 
 ## Variables de entorno
 
@@ -63,19 +62,14 @@ Authorization: Bearer {REPUESTOS_API_TOKEN}
   "responses": [
     {
       "question_id": 123,
-      "verdict": "si" | "no" | "inseguro",
-      "answer_text": "Texto propuesto/publicado",
-      "confidence": 0.91,
-      "reasoning": "Por qué decidió eso",
-      "created_at": "2026-09-23T12:00:00Z",
-      "reviewed_by": null,
-      "reviewed_at": null
+      "revision": true,
+      "respuesta": "Mensaje de respuesta al cliente"
     }
   ]
 }
 ```
 
-Si la tabla termina con otra forma, sólo hay que adaptar `fetchFromRepuestos` en ese archivo. Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas como "Sin evaluar".
+`revision` y `respuesta` son los dos campos de la tool del agente. `question_id` es un identificador que la API debe añadir a cada registro para relacionarlo con una pregunta. Este endpoint sigue siendo un contrato propuesto: si la API expone otra forma, hay que adaptar `fetchFromRepuestos` en ese archivo. Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas como "Sin evaluar".
 
 ## Estructura
 

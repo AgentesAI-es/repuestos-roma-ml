@@ -14,8 +14,10 @@
   --si-bg: #e3f5ea;
   --no: #b42318;
   --no-bg: #fde8e6;
-  --inseguro: #9a5b00;
-  --inseguro-bg: #fff2d6;
+  --revision: #9a5b00;
+  --revision-bg: #fff2d6;
+  --sin-revision: #137a3f;
+  --sin-revision-bg: #e3f5ea;
   --sin: #5f6b7a;
   --sin-bg: #eceff3;
 
@@ -39,8 +41,10 @@
     --si-bg: #133324;
     --no: #ff8a80;
     --no-bg: #3a1714;
-    --inseguro: #ffc661;
-    --inseguro-bg: #3a2a0c;
+    --revision: #ffc661;
+    --revision-bg: #3a2a0c;
+    --sin-revision: #5fd394;
+    --sin-revision-bg: #133324;
     --sin: #a9b3c1;
     --sin-bg: #242d38;
     --shadow: none;
@@ -98,4 +102,4 @@ a:hover { text-decoration: underline; }
   margin: 16px 0;
 }
 .alert-error { border-color: var(--no); background: var(--no-bg); color: var(--no); }
-.alert-info { border-color: var(--inseguro); background: var(--inseguro-bg); color: var(--inseguro); }
+.alert-info { border-color: var(--revision); background: var(--revision-bg); color: var(--revision); }

@@ -48,9 +48,9 @@ const answered = q.status === 'ANSWERED';
         <p class="reply">
           <span class="reply-label">Respuesta publicada:</span> {q.answer.text}
         </p>
-      ) : agent?.answer_text ? (
+      ) : agent?.respuesta ? (
         <p class="reply proposed">
-          <span class="reply-label">Propuesta del agente:</span> {agent.answer_text}
+          <span class="reply-label">Respuesta del agente:</span> {agent.respuesta}
         </p>
       ) : null
     }
@@ -88,7 +88,7 @@ const answered = q.status === 'ANSWERED';
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.02em;
-    color: var(--inseguro);
+    color: var(--revision);
   }
   .ml-status.answered { color: var(--si); }
   .text {
@@ -110,7 +110,7 @@ const answered = q.status === 'ANSWERED';
     font-size: 14px;
     overflow-wrap: anywhere;
   }
-  .reply.proposed { border-left-color: var(--inseguro); }
+  .reply.proposed { border-left-color: var(--revision); }
   .reply-label { font-weight: 600; color: var(--text-muted); }
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
   .detail { font-size: 13px; padding: 6px 10px; }

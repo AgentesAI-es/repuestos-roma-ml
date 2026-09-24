@@ -10,16 +10,15 @@
  *   → { "responses": AgentResponse[] }
  */
 import { AGENT_MOCK, REPUESTOS_API_URL, REPUESTOS_API_TOKEN } from 'astro:env/server';
-import type { AgentResponse, AgentStatus, AgentVerdict } from './types';
+import type { AgentResponse, AgentStatus } from './types';
 
 export type AgentResponseMap = Map<number, AgentResponse>;
 
-export const AGENT_STATUSES: AgentStatus[] = ['si', 'no', 'inseguro', 'sin_evaluar'];
+export const AGENT_STATUSES: AgentStatus[] = ['revision', 'sin_revision', 'sin_evaluar'];
 
 export const AGENT_STATUS_META: Record<AgentStatus, { label: string; hint: string }> = {
-  si: { label: 'Sí', hint: 'Respuesta positiva publicada automáticamente' },
-  no: { label: 'No', hint: 'Respuesta negativa publicada automáticamente' },
-  inseguro: { label: 'Inseguro', hint: 'Pendiente de aprobación humana' },
+  revision: { label: 'Requiere revisión', hint: 'La respuesta necesita supervisión humana' },
+  sin_revision: { label: 'Sin revisión', hint: 'La respuesta no necesita supervisión humana' },
   sin_evaluar: { label: 'Sin evaluar', hint: 'El agente todavía no procesó esta pregunta' },
 };
 
@@ -28,7 +27,8 @@ export function isAgentStatus(value: string | null | undefined): value is AgentS
 }
 
 export function agentStatusOf(map: AgentResponseMap, questionId: number): AgentStatus {
-  return map.get(questionId)?.verdict ?? 'sin_evaluar';
+  const response = map.get(questionId);
+  return response ? (response.revision ? 'revision' : 'sin_revision') : 'sin_evaluar';
 }
 
 export function agentSource(): 'repuestos' | 'mock' | 'none' {
@@ -63,34 +63,33 @@ async function fetchFromRepuestos(questionIds: number[]): Promise<AgentResponseM
 
   const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`API repuestos respondió ${res.status}`);
-  const body = (await res.json()) as { responses?: AgentResponse[] };
-  return new Map((body.responses ?? []).map((r) => [Number(r.question_id), r]));
+  const body = (await res.json()) as { responses?: unknown };
+  if (!Array.isArray(body.responses)) throw new Error('API repuestos devolvió respuestas inválidas');
+  const responses = body.responses.filter((value): value is AgentResponse => {
+    if (!value || typeof value !== 'object') return false;
+    const response = value as Record<string, unknown>;
+    return typeof response.question_id === 'number' && Number.isSafeInteger(response.question_id)
+      && typeof response.revision === 'boolean' && typeof response.respuesta === 'string';
+  });
+  return new Map(responses.map((response) => [response.question_id, response]));
 }
 
 // --- Mock (solo para previsualizar) ---
 
-const MOCK_TEXT: Record<AgentVerdict, string> = {
-  si: '¡Hola! Sí, es compatible con tu vehículo. Tenemos stock disponible para envío inmediato. ¡Saludos!',
-  no: 'Hola, lamentablemente no es compatible con ese modelo. Consultanos y te indicamos el repuesto correcto. ¡Saludos!',
-  inseguro: 'Hola, estamos verificando la compatibilidad con tu modelo exacto y te respondemos a la brevedad.',
-};
-
 function mockResponses(questionIds: number[]): AgentResponseMap {
-  const verdicts: (AgentVerdict | null)[] = ['si', 'no', 'inseguro', 'si', null, 'inseguro', 'si'];
+  const responses: ({ revision: boolean; respuesta: string } | null)[] = [
+    { revision: false, respuesta: '¡Hola! Sí, es compatible con tu vehículo. Tenemos stock disponible para envío inmediato. ¡Saludos!' },
+    { revision: false, respuesta: 'Hola, lamentablemente no es compatible con ese modelo. Consultanos y te indicamos el repuesto correcto. ¡Saludos!' },
+    { revision: true, respuesta: 'Hola, estamos verificando la compatibilidad con tu modelo exacto y te respondemos a la brevedad.' },
+    null,
+  ];
   const map: AgentResponseMap = new Map();
   for (const id of questionIds) {
-    const verdict = verdicts[id % verdicts.length];
-    if (!verdict) continue;
+    const response = responses[id % responses.length];
+    if (!response) continue;
     map.set(id, {
       question_id: id,
-      verdict,
-      answer_text: MOCK_TEXT[verdict],
-      confidence: verdict === 'inseguro' ? 0.42 : 0.91,
-      reasoning:
-        verdict === 'inseguro'
-          ? 'La publicación no indica el año del vehículo; no se puede confirmar compatibilidad.'
-          : 'Compatibilidad verificada contra los atributos de la publicación.',
-      created_at: new Date().toISOString(),
+      ...response,
     });
   }
   return map;

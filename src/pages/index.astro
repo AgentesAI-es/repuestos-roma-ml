@@ -87,7 +87,7 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
       <h1>Preguntas de clientes</h1>
       <p class="muted">
         {data ? `${total} preguntas en Mercado Libre` : 'Mercado Libre'}
-        {agentSource() === 'none' && ' · estados del agente disponibles en la fase 2'}
+        {agentSource() === 'none' && ' · revisión del agente disponible al conectar la API de repuestos'}
       </p>
     </div>
     <a href={Astro.url.pathname + Astro.url.search} class="btn">↻ Actualizar</a>
@@ -252,7 +252,7 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
 
   .stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
     margin-bottom: 16px;
   }
@@ -267,9 +267,8 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
   }
   .stat:hover { transform: translateY(-1px); }
   .stat.active { outline: 2px solid var(--c); }
-  .stat.si { --c: var(--si); }
-  .stat.no { --c: var(--no); }
-  .stat.inseguro { --c: var(--inseguro); }
+  .stat.revision { --c: var(--revision); }
+  .stat.sin_revision { --c: var(--sin-revision); }
   .stat.sin_evaluar { --c: var(--sin); }
   .stat-label { font-weight: 600; color: var(--c); }
   .stat-value { font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }

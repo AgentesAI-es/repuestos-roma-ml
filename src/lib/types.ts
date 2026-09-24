@@ -90,23 +90,13 @@ export interface QuestionDetailResponse {
 
 // Respuestas del agente (API de repuestos — fase 2)
 
-/** si / no: respondida automáticamente. inseguro: pendiente de aprobación humana. */
-export type AgentVerdict = 'si' | 'no' | 'inseguro';
-
-/** Estado que muestra la UI: los del agente + "sin_evaluar" cuando aún no hay registro. */
-export type AgentStatus = AgentVerdict | 'sin_evaluar';
+/** Estado que muestra la UI según si la respuesta necesita revisión humana. */
+export type AgentStatus = 'revision' | 'sin_revision' | 'sin_evaluar';
 
 export interface AgentResponse {
+  /** Identificador añadido por la API para asociar la salida del agente a la pregunta. */
   question_id: number;
-  verdict: AgentVerdict;
-  /** Texto propuesto / publicado por el agente */
-  answer_text: string | null;
-  /** 0..1, opcional */
-  confidence?: number | null;
-  /** Justificación interna del agente */
-  reasoning?: string | null;
-  created_at: string;
-  /** Para "inseguro": quién aprobó / rechazó (fase 2) */
-  reviewed_by?: string | null;
-  reviewed_at?: string | null;
+  /** Campos de la tool del agente. */
+  revision: boolean;
+  respuesta: string;
 }
