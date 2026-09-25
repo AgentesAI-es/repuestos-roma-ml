@@ -115,6 +115,24 @@ export async function countPending(connectionId: number): Promise<number | null>
   return typeof total === 'number' ? total : null;
 }
 
+/**
+ * Las filas `pendiente` de una cuenta, de la más nueva a la más vieja y una
+ * por pregunta. Es lo que arma la pestaña "Para revisar": salen de la tabla y
+ * no de una página de ML, así se ven todas aunque ML las tenga en cualquier
+ * estado. Hasta 200 (el tope de la API).
+ */
+export async function listPending(connectionId: number): Promise<AgentResponse[]> {
+  const url = new URL('/v1/respuestas-agente', REPUESTOS_API_URL);
+  url.searchParams.set('status', 'pendiente');
+  url.searchParams.set('meliConnectionId', String(connectionId));
+  url.searchParams.set('limite', '200');
+  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`API repuestos respondió ${res.status}`);
+  const { respuestas } = (await res.json()) as { respuestas?: AgentResponse[] };
+  const vistas = new Set<string>();
+  return (respuestas ?? []).filter((r) => r.questionId && !vistas.has(r.questionId) && vistas.add(r.questionId));
+}
+
 export class RevisionError extends Error {
   constructor(
     message: string,

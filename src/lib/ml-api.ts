@@ -1,5 +1,5 @@
 import { ML_API_URL, ML_API_TOKEN } from 'astro:env/server';
-import type { ConnectionsList, QuestionDetailResponse, QuestionsList } from './types';
+import type { ConnectionsList, Question, QuestionDetailResponse, QuestionsList } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -62,6 +62,9 @@ export async function countQuestions(connection_id: number, status: 'UNANSWERED'
 export interface ListQuestionsParams {
   connection_id?: number;
   status?: string;
+  /** Historial de un comprador en una publicación: los dos juntos. */
+  item_id?: string;
+  buyer_id?: number;
   sort?: 'asc' | 'desc';
   from_date?: string;
   to_date?: string;
@@ -71,6 +74,20 @@ export interface ListQuestionsParams {
 
 export function listQuestions(params: ListQuestionsParams) {
   return request<QuestionsList>('/questions', { ...params });
+}
+
+/**
+ * Las preguntas anteriores del mismo comprador en la misma publicación, de la
+ * más vieja a la más nueva y sin la actual. `null` si no se pudo: la API
+ * ignoraba `item_id` en su primera versión, así que si vuelve alguna ajena no
+ * se muestra nada (un historial de otro comprador confunde más que ninguno).
+ */
+export async function getBuyerHistory(connection_id: number, question: Question) {
+  const buyer = question.from?.id;
+  if (!question.item_id || !buyer) return [];
+  const { questions } = await listQuestions({ connection_id, item_id: question.item_id, buyer_id: buyer, sort: 'desc', limit: 50 });
+  if (questions.some((q) => q.item_id !== question.item_id || q.from?.id !== buyer)) return null;
+  return questions.filter((q) => q.id !== question.id).reverse();
 }
 
 export function getQuestion(id: string, connection_id?: number) {

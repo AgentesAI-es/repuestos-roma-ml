@@ -145,6 +145,10 @@ a:hover { text-decoration: underline; }
 .muted { color: var(--text-muted); }
 
 .btn { text-decoration: none !important; font-weight: 650; }
+/* `a` de arriba no tiene capa y le gana a daisyUI: sin esto, un link
+   .btn-primary queda con texto color link sobre fondo primario (invisible
+   en modo oscuro). */
+.btn-primary { color: var(--color-primary-content); }
 .btn-primary:hover { filter: brightness(1.08); }
 .btn[aria-disabled='true'] { opacity: 0.45; pointer-events: none; }
 .btn.is-loading { pointer-events: none; }

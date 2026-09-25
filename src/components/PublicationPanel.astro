@@ -1,0 +1,76 @@
+---
+import { formatPrice } from '../lib/format';
+import type { ItemSummary, Publication } from '../lib/types';
+
+interface Props {
+  item: ItemSummary | null | undefined;
+  pub: Publication | null | undefined;
+  itemId: string | null;
+}
+
+const { item, pub, itemId } = Astro.props;
+const title = item?.title ?? pub?.title ?? itemId ?? 'Publicación';
+const permalink = item?.permalink ?? pub?.permalink ?? null;
+const image = item?.pictures?.[0]?.secure_url ?? item?.secure_thumbnail ?? pub?.thumbnail ?? null;
+const price = formatPrice(item?.price ?? pub?.price, item?.currency_id ?? pub?.currency_id);
+const attributes = (item?.attributes ?? []).filter((a) => a.value_name);
+const condition = item?.condition === 'new' ? 'Nuevo' : item?.condition === 'used' ? 'Usado' : item?.condition;
+const facts: [string, string | number][] = [
+  ['Stock', item?.available_quantity ?? ''],
+  ['Vendidos', item?.sold_quantity ?? ''],
+  ['Condición', condition ?? ''],
+  ['Estado', item?.status ?? pub?.status ?? ''],
+].filter(([, v]) => v !== '' && v != null) as [string, string | number][];
+---
+
+<div class="pub">
+  {image && <img src={image} alt={title} loading="lazy" />}
+  <h3>{permalink ? <a href={permalink} target="_blank" rel="noopener">{title}</a> : title}</h3>
+  {price && <p class="price">{price}</p>}
+  {
+    facts.length > 0 && (
+      <dl>
+        {facts.map(([k, v]) => (
+          <>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </>
+        ))}
+      </dl>
+    )
+  }
+  {
+    attributes.length > 0 && (
+      <details>
+        <summary>Características ({attributes.length})</summary>
+        <dl class="attrs">
+          {attributes.map((a) => (
+            <>
+              <dt>{a.name}</dt>
+              <dd>{a.value_name}</dd>
+            </>
+          ))}
+        </dl>
+      </details>
+    )
+  }
+</div>
+
+<style>
+  .pub img {
+    width: 100%;
+    aspect-ratio: 1.3;
+    object-fit: contain;
+    background-color: #fff;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  h3 { font-size: 15px; margin: 0 0 4px; line-height: 1.4; overflow-wrap: anywhere; }
+  .price { font-size: 20px; font-weight: 700; margin: 0 0 10px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 5px 12px; margin: 0; font-size: 13px; }
+  dt { color: var(--text-muted); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+  .attrs { font-size: 12px; }
+</style>

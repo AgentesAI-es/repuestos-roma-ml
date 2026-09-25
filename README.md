@@ -72,7 +72,9 @@ La tabla `respuesta_agente` solo tiene lo que el agente mandó **pidiendo revisi
 
 Mientras las respuestas del agente sean notas privadas en Chatwoot (fase de desarrollo), las que respondió **sin** pedir revisión no quedan en la tabla y ML las sigue viendo sin responder: el panel las muestra como "Sin responder".
 
-Aprobar o editar (`POST /api/revision`, forms del detalle de la pregunta) registra la decisión con el usuario del Basic Auth y **no publica nada en Mercado Libre**. "Aprobar tal cual" no manda texto; "Editar respuesta" manda el texto del editor y **la API decide el estado**: si no cambió, `aprobado`; si cambió, `editado`, y la API deja una nota privada en Chatwoot con la corrección (necesita `CHATWOOT_BOT_TOKEN` en la API). Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas sin datos del agente.
+En la bandeja, toda la card es el link al detalle: con un clic se abre en un modal sobre la lista (el mismo detalle con `?embed=1`, en un iframe; al cerrarlo, si se resolvió algo adentro, la lista se recarga). Ctrl+clic lo abre en otra pestaña. Las pendientes muestran la propuesta entera y un botón **Aprobar** que la aprueba tal cual y vuelve a la lista (`volver`, solo rutas del mismo sitio).
+
+El detalle de la pregunta es una conversación: las preguntas anteriores del comprador en esa publicación (API de ML con `item_id` + `buyer_id`), la actual y sus respuestas, en una card del alto de la pantalla donde solo scrollea el chat. Si la respuesta del agente está pendiente, abajo hay un cuadro de respuesta cargado con la propuesta. Aprobar o editar (`POST /api/revision`) registra la decisión con el usuario del Basic Auth y **no publica nada en Mercado Libre**. Es un solo form que manda el texto del cuadro, y **la API decide el estado**: si no cambió, `aprobado`; si cambió, `editado`, y la API deja una nota privada en Chatwoot con la corrección (necesita `CHATWOOT_BOT_TOKEN` en la API). Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas sin datos del agente.
 
 ## Estructura
 
@@ -82,7 +84,8 @@ src/
   lib/agent-responses.ts   proveedor de estados del agente (repuestos / mock / ninguno)
   lib/types.ts             tipos de ambas APIs
   middleware.ts            Basic Auth opcional
-  pages/index.astro        listado + filtros + resumen por estado
+  components/PublicationPanel.astro   datos de la publicación (costado del detalle; franja en celular)
+  pages/index.astro        listado: pestañas por estado (revisar / sin responder / respondidas / todas) + fechas y orden
   pages/preguntas/[id].astro  detalle: pregunta, respuesta del agente, publicación
   pages/health.ts          healthcheck
 ```

@@ -1,22 +1,25 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import AgentBadge from '../../components/AgentBadge.astro';
-import { ApiError, getQuestion } from '../../lib/ml-api';
-import {
-  AGENT_STATUS_META,
-  REVISION_LABEL,
-  agentSource,
-  agentStatusOf,
-  getAgentResponses,
-  type AgentResponseMap,
-} from '../../lib/agent-responses';
-import { formatDate, formatPrice, ML_STATUS_LABEL } from '../../lib/format';
-import type { QuestionDetailResponse } from '../../lib/types';
+import PublicationPanel from '../../components/PublicationPanel.astro';
+import { ApiError, getBuyerHistory, getConnections, getQuestion } from '../../lib/ml-api';
+import { connectionName } from '../../lib/accounts';
+import { agentStatusOf, getAgentResponses, type AgentResponseMap } from '../../lib/agent-responses';
+import { formatDate } from '../../lib/format';
+import type { Question, QuestionDetailResponse } from '../../lib/types';
 
+/**
+ * El detalle es una conversación: las preguntas anteriores del comprador en
+ * esta publicación, la actual, su respuesta (la publicada en ML y/o la del
+ * agente) y, si la del agente está pendiente, el cuadro para resolverla.
+ * Todo en una card del alto de la pantalla; solo la conversación scrollea.
+ */
 const { id = '' } = Astro.params;
 if (!/^\d+$/.test(id)) return Astro.redirect('/');
 
 const connectionParam = Number(Astro.url.searchParams.get('connection')) || undefined;
+// Dentro del modal de la bandeja: sin barra ni márgenes, y "cerrar" en vez de "volver".
+const embed = Astro.url.searchParams.get('embed') === '1';
 
 let detail: QuestionDetailResponse | null = null;
 let error: string | null = null;
@@ -29,276 +32,322 @@ try {
 }
 
 const q = detail?.question;
-const item = detail?.item;
-const pub = detail?.publication;
-const agentMap: AgentResponseMap = q ? await getAgentResponses([q.id]) : new Map();
+const connection = detail?.connection_id ?? connectionParam;
+
+// El historial y la respuesta del agente no dependen uno del otro. Un fallo
+// en cualquiera no rompe el detalle.
+const [historyResult, agentResult, connectionsResult] = await Promise.allSettled([
+  q && connection ? getBuyerHistory(connection, q) : Promise.resolve([] as Question[]),
+  q ? getAgentResponses([q.id]) : Promise.resolve(new Map() as AgentResponseMap),
+  getConnections(),
+]);
+const history = historyResult.status === 'fulfilled' ? historyResult.value : null;
+if (historyResult.status === 'rejected') console.error('[pregunta] historial', historyResult.reason);
+const agentMap: AgentResponseMap = agentResult.status === 'fulfilled' ? agentResult.value : new Map();
 const agent = q ? agentMap.get(q.id) : undefined;
 const agentStatus = q ? agentStatusOf(agentMap, q) : 'sin_responder';
+const account =
+  connectionsResult.status === 'fulfilled'
+    ? connectionsResult.value.connections.find((c) => c.id === connection)
+    : undefined;
 
-// Resultado de aprobar/editar (vuelve de /api/revision).
+// Resultado de resolver (vuelve de /api/revision).
 const revisionOk = Astro.url.searchParams.get('revision');
 const revisionError = Astro.url.searchParams.get('revision_error');
 
-const image = item?.pictures?.[0]?.secure_url ?? item?.secure_thumbnail ?? pub?.thumbnail ?? null;
-const attributes = (item?.attributes ?? []).filter((a) => a.value_name);
-const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
+const backHref = connection ? `/?connection=${connection}` : '/';
+const fullHref = `/preguntas/${id}${connection ? `?connection=${connection}` : ''}`;
+
+/** "23/09/26" para separar la conversación por día. */
+const dayOf = (iso: string | null | undefined) => (iso ? formatDate(iso).split(',')[0] : '');
+const hourOf = (iso: string | null | undefined) => (iso ? formatDate(iso).split(', ')[1] ?? '' : '');
+const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_created));
 ---
 
-<Layout title={q ? `Pregunta ${q.id}` : 'Pregunta'} connectionId={connectionParam}>
-  <a href={backHref} class="back">← Volver a la bandeja</a>
-
-  {q && <div class="page-head"><span class="eyebrow">Detalle de consulta</span><h1>Pregunta #{q.id}</h1><p class="muted">Revisá el contexto y resolvé la respuesta del agente.</p></div>}
-
-  {error && <div class="alert alert-error" role="alert"><strong>No se pudo cargar la pregunta.</strong> {error}</div>}
+<Layout title={q ? `Pregunta ${q.id}` : 'Pregunta'} connectionId={connection} accounts={false} fill bare={embed}>
+  {error && (
+    <>
+      {embed ? <button type="button" class="btn btn-sm btn-ghost" data-close>Cerrar</button> : <a href={backHref} class="back">← Bandeja</a>}
+      <div class="alert alert-error" role="alert"><strong>No se pudo cargar la pregunta.</strong> {error}</div>
+    </>
+  )}
 
   {
     q && (
-      <div class="grid">
-        <div class="main">
-          <section class="card block">
-            <div class="meta muted">
-              <span class:list={['ml-status', { answered: q.status === 'ANSWERED' }]}>
-                {ML_STATUS_LABEL[q.status] ?? q.status}
-              </span>
-              <span>· {formatDate(q.date_created)}</span>
-              {q.from?.nickname && <span>· {q.from.nickname}</span>}
-              <span>· #{q.id}</span>
-            </div>
-            <h2 class="question">{q.text}</h2>
-
-            {q.answer?.text ? (
-              <div class="answer">
-                <div class="label">Respuesta publicada en ML · {formatDate(q.answer.date_created)}</div>
-                <p>{q.answer.text}</p>
-              </div>
+      <div class:list={['shell', { embed }]}>
+        <section class="card chat" aria-label="Conversación">
+          <header class="chat-head">
+            {embed ? (
+              <button type="button" class="back close" data-close aria-label="Cerrar">✕</button>
             ) : (
-              <p class="muted">Todavía no tiene respuesta publicada en Mercado Libre.</p>
+              <a href={backHref} class="back" aria-label="Volver a la bandeja">←<span class="back-label"> Bandeja</span></a>
             )}
-          </section>
+            <h1>
+              <span class="buyer">{q.from?.nickname ?? 'Comprador'}</span>
+              <span class="muted head-meta">
+                {account && <> · {connectionName(account)}</>} · #{q.id}
+              </span>
+            </h1>
+            <AgentBadge status={agentStatus} />
+            {embed && <a href={fullHref} target="_top" class="open-full" title="Abrir en página completa" aria-label="Abrir en página completa">↗</a>}
+          </header>
 
-          <section class:list={['card', 'block', 'agent', agentStatus]}>
-            <div class="agent-head">
-              <div><span class="eyebrow">Acción principal</span><h2>Respuesta propuesta</h2></div>
-              <AgentBadge status={agentStatus} size="md" />
+          <details class="pub-strip">
+            <summary>
+              {detail?.item?.secure_thumbnail || detail?.publication?.thumbnail ? (
+                <img src={detail?.item?.secure_thumbnail ?? detail?.publication?.thumbnail} alt="" />
+              ) : null}
+              <span class="strip-title">{detail?.item?.title ?? detail?.publication?.title ?? q.item_id}</span>
+              <span class="strip-more muted">Ver publicación</span>
+            </summary>
+            <PublicationPanel item={detail?.item} pub={detail?.publication} itemId={q.item_id} />
+          </details>
+
+          <div class="messages" id="messages">
+            {history === null && <p class="system">No se pudo cargar el historial del comprador en esta publicación.</p>}
+            {history?.length === 0 && <p class="system">Es la primera pregunta de este comprador en esta publicación.</p>}
+
+            {(history ?? []).map((h, i) => (
+              <>
+                {days[i] !== days[i - 1] && <p class="day">{days[i]}</p>}
+                <div class="msg buyer-msg">
+                  <p>{h.text}</p>
+                  <span class="time">{hourOf(h.date_created)}</span>
+                </div>
+                {h.answer?.text && (
+                  <div class="msg seller-msg">
+                    <span class="who">Vendedor</span>
+                    <p>{h.answer.text}</p>
+                    <span class="time">{hourOf(h.answer.date_created)}</span>
+                  </div>
+                )}
+              </>
+            ))}
+
+            {days.at(-1) !== days.at(-2) && <p class="day">{days.at(-1)}</p>}
+            <div class="msg buyer-msg current">
+              <span class="who">Pregunta actual</span>
+              <p>{q.text}</p>
+              <span class="time">{hourOf(q.date_created)}</span>
             </div>
-            <p class="muted hint">{AGENT_STATUS_META[agentStatus].hint}.</p>
+
+            {q.answer?.text && (
+              <div class="msg seller-msg">
+                <span class="who">Publicada en Mercado Libre</span>
+                <p>{q.answer.text}</p>
+                <span class="time">{formatDate(q.answer.date_created)}</span>
+              </div>
+            )}
+
+            {agent?.status === 'pendiente' && (
+              <div class="msg seller-msg agent pendiente">
+                <span class="who">⏳ Propuesta del agente</span>
+                <p>{agent.respuestaPropuesta}</p>
+                <span class="time">{formatDate(agent.creadoEn)}</span>
+              </div>
+            )}
+            {agent?.status === 'aprobado' && (
+              <div class="msg seller-msg agent resuelta">
+                <span class="who">✓ Aprobada{agent.revisadoPor && ` por ${agent.revisadoPor}`}</span>
+                <p>{agent.respuestaEnviada ?? agent.respuestaPropuesta}</p>
+                <span class="time">{formatDate(agent.revisadoEn)}</span>
+              </div>
+            )}
+            {agent?.status === 'editado' && (
+              <div class="msg seller-msg agent resuelta">
+                <span class="who">✏️ Editada{agent.revisadoPor && ` por ${agent.revisadoPor}`}</span>
+                <p>{agent.respuestaEnviada}</p>
+                <details class="original">
+                  <summary>Propuesta original del agente</summary>
+                  <p>{agent.respuestaPropuesta}</p>
+                </details>
+                <span class="time">{formatDate(agent.revisadoEn)}</span>
+              </div>
+            )}
 
             {revisionOk && (
-              <div class="alert alert-info" role="status">
+              <p class="system ok" role="status">
                 {revisionOk === 'editado'
                   ? 'Respuesta editada. Quedó una nota privada en Chatwoot con el texto corregido.'
                   : 'Respuesta aprobada.'}
-              </div>
-            )}
-            {revisionError && (
-              <div class="alert alert-error" role="alert">
-                <strong>No se pudo guardar la decisión.</strong> {revisionError}
-              </div>
-            )}
-
-            {agent ? (
-              <>
-                {agent.status === 'editado' ? (
-                  <>
-                    <span class="label">Enviada (editada)</span>
-                    <blockquote>{agent.respuestaEnviada}</blockquote>
-                    <details class="original">
-                      <summary>Ver la propuesta original del agente</summary>
-                      <blockquote class="tachada">{agent.respuestaPropuesta}</blockquote>
-                    </details>
-                  </>
-                ) : (
-                  <blockquote>{agent.respuestaEnviada ?? agent.respuestaPropuesta}</blockquote>
-                )}
-                {agent.status === 'pendiente' ? (
-                  <div class="hitl">
-                    <form method="post" action="/api/revision">
-                      <input type="hidden" name="id" value={agent.id} />
-                      <input type="hidden" name="question_id" value={q.id} />
-                      {connectionParam && <input type="hidden" name="connection" value={connectionParam} />}
-                      <button class="btn btn-primary" type="submit" name="accion" value="aprobar" data-loading="Aprobando…">
-                        Aprobar tal cual
-                      </button>
-                    </form>
-                    <details class="editar">
-                      <summary class="btn btn-outline">Editar respuesta</summary>
-                      <form method="post" action="/api/revision">
-                        <input type="hidden" name="id" value={agent.id} />
-                        <input type="hidden" name="question_id" value={q.id} />
-                        {connectionParam && <input type="hidden" name="connection" value={connectionParam} />}
-                        <label class="label" for="respuesta-editada">Texto que se va a enviar</label>
-                        <textarea id="respuesta-editada" class="textarea" name="respuesta" rows="5" maxlength="2000" required>{agent.respuestaPropuesta}</textarea>
-                        <button class="btn btn-primary" type="submit" name="accion" value="editar" data-loading="Guardando…">
-                          Guardar edición
-                        </button>
-                      </form>
-                    </details>
-                    <p class="muted decision-note">La decisión se registra internamente y no publica nada en Mercado Libre. Si editás, queda una nota privada en Chatwoot con el texto corregido.</p>
-                  </div>
-                ) : (
-                  <p class:list={['decision', agent.status]}>
-                    {REVISION_LABEL[agent.status][0].toUpperCase() + REVISION_LABEL[agent.status].slice(1)}
-                    {agent.revisadoPor && ` por ${agent.revisadoPor}`}
-                    {agent.revisadoEn && ` · ${formatDate(agent.revisadoEn)}`}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p class="muted">
-                {agentSource() === 'none'
-                  ? 'La API de repuestos no está conectada (falta REPUESTOS_API_URL).'
-                  : 'No hay respuesta del agente pendiente de revisión para esta pregunta.'}
               </p>
             )}
-          </section>
-        </div>
+          </div>
 
-        <aside class="card block item">
-          <h2>Publicación</h2>
-          {image && <img src={image} alt={item?.title ?? pub?.title ?? ''} />}
-          <h3>
-            {item?.permalink || pub?.permalink ? (
-              <a href={item?.permalink ?? pub?.permalink} target="_blank" rel="noopener">
-                {item?.title ?? pub?.title ?? q.item_id}
-              </a>
-            ) : (
-              (item?.title ?? pub?.title ?? q.item_id)
-            )}
-          </h3>
-          <p class="price">{formatPrice(item?.price ?? pub?.price, item?.currency_id ?? pub?.currency_id)}</p>
-          <dl class="facts">
-            {item?.available_quantity != null && (
-              <>
-                <dt>Stock</dt>
-                <dd>{item.available_quantity}</dd>
-              </>
-            )}
-            {item?.sold_quantity != null && (
-              <>
-                <dt>Vendidos</dt>
-                <dd>{item.sold_quantity}</dd>
-              </>
-            )}
-            {item?.condition && (
-              <>
-                <dt>Condición</dt>
-                <dd>{item.condition === 'new' ? 'Nuevo' : item.condition === 'used' ? 'Usado' : item.condition}</dd>
-              </>
-            )}
-            {(item?.status ?? pub?.status) && (
-              <>
-                <dt>Estado</dt>
-                <dd>{item?.status ?? pub?.status}</dd>
-              </>
-            )}
-          </dl>
-
-          {attributes.length > 0 && (
-            <details open={attributes.length <= 12}>
-              <summary>Características ({attributes.length})</summary>
-              <dl class="facts attrs">
-                {attributes.map((a) => (
-                  <>
-                    <dt>{a.name}</dt>
-                    <dd>{a.value_name}</dd>
-                  </>
-                ))}
-              </dl>
-            </details>
+          {agent?.status === 'pendiente' && (
+            <form method="post" action="/api/revision" class="composer" data-original={agent.respuestaPropuesta}>
+              {revisionError && (
+                <p class="composer-error" role="alert"><strong>No se pudo guardar.</strong> {revisionError}</p>
+              )}
+              <input type="hidden" name="id" value={agent.id} />
+              <input type="hidden" name="question_id" value={q.id} />
+              {connection && <input type="hidden" name="connection" value={connection} />}
+              {embed && <input type="hidden" name="embed" value="1" />}
+              <label class="sr-only" for="respuesta">Respuesta que se va a enviar</label>
+              <textarea id="respuesta" name="respuesta" class="textarea" rows="3" maxlength="2000" required>{agent.respuestaPropuesta}</textarea>
+              <div class="composer-foot">
+                <span class="muted composer-hint" data-hint>
+                  Si no la tocás, se aprueba tal cual. No publica nada en Mercado Libre.
+                </span>
+                <button class="btn btn-primary" type="submit" data-submit data-loading="Guardando…">Aprobar</button>
+              </div>
+            </form>
           )}
+        </section>
+
+        <aside class="card side">
+          <PublicationPanel item={detail?.item} pub={detail?.publication} itemId={q.item_id} />
         </aside>
       </div>
     )
   }
 </Layout>
 
+<script>
+  // En el modal: cerrar, y avisarle a la bandeja que algo cambió para que se
+  // recargue al cerrar.
+  if (window.parent !== window) {
+    const avisar = (type: string) => window.parent.postMessage({ type }, location.origin);
+    document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => avisar('detalle:cerrar')));
+    if (new URLSearchParams(location.search).get('revision')) avisar('detalle:cambio');
+  }
+
+  // Como un chat: arranca abajo, en la pregunta actual.
+  const messages = document.getElementById('messages');
+  if (messages) messages.scrollTop = messages.scrollHeight;
+
+  // El botón dice lo que va a pasar: sin cambios se aprueba; con cambios, se
+  // envía editada (la API decide igual, esto es solo el texto).
+  const form = document.querySelector<HTMLFormElement>('form.composer');
+  const textarea = form?.querySelector('textarea');
+  const submit = form?.querySelector<HTMLButtonElement>('[data-submit]');
+  const hint = form?.querySelector<HTMLElement>('[data-hint]');
+  if (form && textarea && submit && hint) {
+    const original = (form.dataset.original ?? '').trim();
+    const autosize = () => {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight + 2, 220)}px`;
+    };
+    const update = () => {
+      const edited = textarea.value.trim() !== original;
+      submit.textContent = edited ? 'Enviar editada' : 'Aprobar';
+      hint.textContent = edited
+        ? 'Queda como editada y deja una nota privada en Chatwoot con este texto.'
+        : 'Si no la tocás, se aprueba tal cual. No publica nada en Mercado Libre.';
+      autosize();
+    };
+    textarea.addEventListener('input', update);
+    update();
+  }
+</script>
+
 <style>
-  .back { display: inline-block; margin-bottom: 14px; }
-  .page-head { margin: 2px 0 24px; }
-  .eyebrow { display: block; margin-bottom: 6px; color: var(--link); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-  .page-head h1 { margin: 0; font-size: clamp(25px, 3vw, 32px); line-height: 1.2; letter-spacing: -.03em; }
-  .page-head p { margin: 6px 0 0; font-size: 14px; }
-  .grid {
+  .shell {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 310px;
-    gap: 20px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 16px;
+    /* Topbar (68) + aire de main (30). */
+    height: calc(100dvh - 98px);
+    min-height: 460px;
   }
-  .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .block { padding: 24px; }
-  .meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
-  .ml-status { font-weight: 700; text-transform: uppercase; font-size: 12px; color: var(--revision); }
-  .ml-status.answered { color: var(--si); }
-  .question { font-size: clamp(19px, 2vw, 24px); line-height: 1.4; margin: 12px 0 18px; overflow-wrap: anywhere; }
-  .answer {
-    border-left: 3px solid var(--si);
-    background: var(--surface-2);
-    padding: 10px 14px;
-    border-radius: 0 8px 8px 0;
-  }
-  .answer p { margin: 4px 0 0; }
-  .label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
 
-  .agent { order: -1; border-top: 4px solid var(--c, var(--sin)); }
-  .agent.pendiente { --c: var(--revision); }
-  .agent.respondida { --c: var(--sin-revision); }
-  .decision { font-size: 14px; font-weight: 600; margin: 0; }
-  .decision.aprobado { color: var(--si); }
-  .decision.editado { color: var(--si); }
-  .alert { margin: 0 0 12px; }
-  .agent-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-  h2 { margin: 0; font-size: 19px; }
-  .hint { margin: 7px 0 17px; font-size: 13px; }
-  blockquote {
-    margin: 0;
-    padding: 18px 20px;
-    background: var(--surface-2);
-    border-radius: 10px;
-    border-left: 3px solid var(--c, var(--sin));
-    font-size: 17px;
-    line-height: 1.6;
+  .shell.embed { height: 100dvh; min-height: 0; padding: 12px; gap: 12px; }
+  .close { border: 0; background: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 0 4px; }
+  .close:hover { color: var(--text); }
+  .open-full { flex: none; font-size: 16px; color: var(--text-muted); text-decoration: none !important; }
+  .open-full:hover { color: var(--link); }
+  .chat { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 0; }
+  .chat-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .back { flex: none; font-size: 14px; font-weight: 600; }
+  h1 { flex: 1; min-width: 0; margin: 0; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .head-meta { font-weight: 500; font-size: 14px; }
+
+  .pub-strip { display: none; border-bottom: 1px solid var(--border); }
+  .pub-strip summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 13px;
+  }
+  .pub-strip summary::-webkit-details-marker { display: none; }
+  .pub-strip summary img { width: 34px; height: 34px; object-fit: contain; background: #fff; border-radius: 6px; flex: none; }
+  .strip-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  .strip-more { flex: none; font-size: 12px; }
+  .pub-strip[open] .strip-more { visibility: hidden; }
+  .pub-strip > :global(.pub) { padding: 4px 18px 14px; max-height: 45dvh; overflow-y: auto; }
+  .pub-strip :global(.pub img) { max-width: 200px; }
+
+  .messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 18px;
+    background: var(--bg);
+    overscroll-behavior: contain;
+  }
+  /* Con pocos mensajes, la conversación va pegada abajo (como un chat y como el esqueleto del modal). */
+  .messages > :first-child { margin-top: auto; }
+  .day, .system { align-self: center; margin: 6px 0; font-size: 12px; color: var(--text-muted); text-align: center; }
+  .day { padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+  .system.ok { color: var(--si); font-weight: 600; }
+
+  .msg {
+    max-width: min(78%, 620px);
+    padding: 8px 12px 6px;
+    border-radius: 12px;
+    font-size: 15px;
+    line-height: 1.45;
     overflow-wrap: anywhere;
+    border: 1px solid var(--border);
   }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
-  dt { color: var(--text-muted); }
-  dd { margin: 0; overflow-wrap: anywhere; }
-  .hitl { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 13px; }
-  .hitl form { margin: 0; }
-  .editar { margin: 0; }
-  .editar summary { list-style: none; margin: 0; }
-  .editar summary::-webkit-details-marker { display: none; }
-  .editar[open] { flex-basis: 100%; order: 1; }
-  .editar[open] summary { display: none; }
-  .editar form { display: flex; flex-direction: column; gap: 8px; }
-  .editar textarea { width: 100%; font-size: 15px; line-height: 1.5; }
-  .editar .btn { align-self: flex-start; }
-  .original { margin-top: 10px; font-size: 13px; }
-  .tachada { font-size: 14px; color: var(--text-muted); border-left-color: var(--border); }
-  .decision { margin-top: 14px; }
-  .decision-note { flex-basis: 100%; order: 2; margin: 2px 0 0; font-size: 12px; }
-  .hitl .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .msg p { margin: 0; white-space: pre-wrap; }
+  .who { display: block; margin-bottom: 2px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+  .time { display: block; margin-top: 3px; font-size: 11px; color: var(--text-muted); text-align: right; }
+  .buyer-msg { align-self: flex-start; background: var(--surface); border-bottom-left-radius: 4px; }
+  .buyer-msg.current { border-color: var(--link); box-shadow: 0 0 0 1px var(--link); }
+  .buyer-msg.current .who { color: var(--link); }
+  .seller-msg { align-self: flex-end; background: var(--sin-revision-bg); border-bottom-right-radius: 4px; }
+  .agent.pendiente { background: var(--revision-bg); border-color: var(--revision); border-style: dashed; }
+  .agent.pendiente .who { color: var(--revision); }
+  .agent.resuelta .who { color: var(--si); }
+  .original { margin-top: 6px; font-size: 13px; color: var(--text-muted); }
+  .original summary { cursor: pointer; font-size: 12px; }
+  .original p { margin-top: 4px; text-decoration: line-through; }
 
-  .item img {
-    width: 100%;
-    aspect-ratio: 1.3;
-    object-fit: contain;
-    background-color: #fff;
-    border-radius: 8px;
-    margin: 12px 0;
-  }
-  .item h3 { font-size: 15px; margin: 0 0 4px; line-height: 1.4; }
-  .price { font-size: 22px; font-weight: 700; margin: 0 0 12px; }
-  details { margin-top: 14px; }
-  summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
-  .attrs { font-size: 13px; }
+  .composer { display: flex; flex-direction: column; gap: 8px; padding: 12px 18px 14px; border-top: 1px solid var(--border); background: var(--surface); }
+  .composer textarea { width: 100%; min-height: 64px; font-size: 15px; line-height: 1.45; resize: none; background: var(--surface); }
+  .composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .composer-hint { font-size: 12px; }
+  .composer-error { margin: 0; font-size: 13px; color: var(--no); }
 
-  @media (max-width: 860px) {
-    .grid { grid-template-columns: 1fr; }
+  .side { overflow-y: auto; padding: 18px; }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .side { display: none; }
+    .pub-strip { display: block; }
   }
   @media (max-width: 640px) {
-    .block { padding: 18px; }
-    .agent-head { flex-wrap: wrap; }
-    blockquote { font-size: 15px; padding: 14px; }
-    .hitl .btn { flex: 1; }
+    .shell.embed { padding: 0; }
+    .shell.embed .chat { border-radius: 0; border: 0; }
+    .chat-head { padding: 10px 12px; gap: 8px; }
+    .back-label, .head-meta { display: none; }
+    .messages { padding: 12px; }
+    .msg { max-width: 88%; font-size: 14px; }
+    .composer { padding: 10px 12px 12px; }
+    .composer-foot { flex-direction: column; align-items: stretch; }
+    .composer-foot .btn { width: 100%; }
   }
 </style>

@@ -9,12 +9,15 @@ interface Props {
   agentStatus: AgentStatus;
   agent?: AgentResponse;
   connectionId?: number;
+  /** La URL de la lista, para que "Aprobar" vuelva acá. */
+  returnTo: string;
 }
 
-const { question: q, agentStatus, agent, connectionId } = Astro.props;
+const { question: q, agentStatus, agent, connectionId, returnTo } = Astro.props;
 const pub = q.publication;
 const detailHref = `/preguntas/${q.id}${connectionId ? `?connection=${connectionId}` : ''}`;
 const answered = q.status === 'ANSWERED';
+const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
 ---
 
 <article class="card q">
@@ -29,7 +32,8 @@ const answered = q.status === 'ANSWERED';
       {q.from?.nickname && <span class="muted">{q.from.nickname}</span>}
     </div>
 
-    <a href={detailHref} class="text">{q.text}</a>
+    {/* El link cubre toda la card (::after). La bandeja lo abre en un modal; Ctrl+clic, en otra pestaña. */}
+    <a href={detailHref} class="text" data-detalle>{q.text}</a>
 
     {
       pub && (
@@ -44,8 +48,8 @@ const answered = q.status === 'ANSWERED';
       )
     }
 
-    {agentStatus === 'pendiente' && agent ? (
-      <p class="reply proposed"><span class="reply-label">Propuesta del agente</span>{agent.respuestaPropuesta}</p>
+    {pending ? (
+      <p class="reply proposed full"><span class="reply-label">Propuesta del agente</span>{agent.respuestaPropuesta}</p>
     ) : q.answer?.text ? (
       <p class="reply"><span class="reply-label">Respuesta publicada</span>{q.answer.text}</p>
     ) : agent ? (
@@ -57,14 +61,25 @@ const answered = q.status === 'ANSWERED';
 
   <div class="side">
     <AgentBadge status={agentStatus} />
-    <a href={detailHref} class:list={['btn', 'detail', { 'btn-primary': agentStatus === 'pendiente', 'btn-outline': agentStatus !== 'pendiente' }]}>
-      {agentStatus === 'pendiente' ? 'Revisar →' : 'Ver detalle →'}
-    </a>
+    {
+      pending && (
+        <form method="post" action="/api/revision" class="approve">
+          <input type="hidden" name="id" value={agent!.id} />
+          <input type="hidden" name="question_id" value={q.id} />
+          {connectionId && <input type="hidden" name="connection" value={connectionId} />}
+          <input type="hidden" name="volver" value={returnTo} />
+          <button type="submit" class="btn btn-sm btn-primary" data-loading="Aprobando…" title="Aprueba la propuesta del agente tal cual">
+            ✓ Aprobar
+          </button>
+        </form>
+      )
+    }
   </div>
 </article>
 
 <style>
   .q {
+    position: relative;
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr) auto;
     gap: 18px;
@@ -72,6 +87,7 @@ const answered = q.status === 'ANSWERED';
     align-items: center;
     transition: border-color .15s ease, box-shadow .15s ease;
   }
+  .q:hover .text { color: var(--link); }
   .q:hover { border-color: #c7d3df; box-shadow: 0 10px 28px rgb(18 39 60 / .07); }
   .thumb {
     width: 72px;
@@ -102,7 +118,13 @@ const answered = q.status === 'ANSWERED';
     font-weight: 680;
     line-height: 1.4;
     overflow-wrap: anywhere;
+    text-decoration: none !important;
   }
+  .text::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+  .text:focus-visible { outline: none; }
+  .q:has(.text:focus-visible) { outline: 2px solid var(--link); outline-offset: 2px; }
+  /* Lo que tiene acción propia queda por encima del link de la card. */
+  .pub a, .approve { position: relative; z-index: 1; }
   .pub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pub a { color: inherit; }
   .reply {
@@ -121,18 +143,20 @@ const answered = q.status === 'ANSWERED';
     overflow-wrap: anywhere;
   }
   .reply.proposed { border-left-color: var(--revision); }
+  /* La propuesta pendiente entera: se puede aprobar desde acá, que se lea todo. */
+  .reply.full { max-height: none; display: block; font-size: 13px; }
   .reply.proposed.aprobado { border-left-color: var(--si); }
   .reply.proposed.editado { border-left-color: var(--si); }
   .reply-label { font-weight: 750; color: var(--text-muted); margin-right: 8px; }
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 150px; }
-  .detail { min-height: 34px; font-size: 12px; }
+  .approve { margin: 0; }
 
   @media (max-width: 640px) {
     .q { grid-template-columns: 54px 1fr; gap: 10px 12px; padding: 14px; }
     .thumb { width: 54px; height: 54px; align-self: start; }
     .side { grid-column: 2; flex-direction: row; justify-content: space-between; align-items: center; min-width: 0; width: 100%; }
-    .detail { min-height: 32px; padding-inline: 10px; }
     .reply { display: none; }
+    .reply.full { display: block; }
     .pub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   }
 </style>

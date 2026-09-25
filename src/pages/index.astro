@@ -1,53 +1,91 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import QuestionCard from '../components/QuestionCard.astro';
-import { ApiError, getConnections, listQuestions } from '../lib/ml-api';
-import { connectionName, resolveConnectionId } from '../lib/accounts';
+import { ApiError, getConnections, getQuestion, listQuestions } from '../lib/ml-api';
+import { resolveConnectionId } from '../lib/accounts';
 import {
-  AGENT_STATUSES,
   AGENT_STATUS_META,
   agentSource,
   agentStatusOf,
+  countPending,
   getAgentResponses,
   isAgentStatus,
+  listPending,
 } from '../lib/agent-responses';
 import { dayToIso } from '../lib/format';
-import type { AgentStatus, Connection, QuestionsList } from '../lib/types';
+import type { AgentStatus, Connection, QuestionListItem } from '../lib/types';
 
 const PAGE_SIZE = 50;
 const params = Astro.url.searchParams;
 
-const status = params.get('status') ?? 'UNANSWERED';
+/**
+ * Las pestañas son el único filtro de estado, ordenadas por cuánta atención
+ * piden. Cada una trae sus datos de otra forma:
+ *
+ *   pendiente      las filas `pendiente` de la API de repuestos, con el detalle
+ *                  de cada pregunta desde ML (todas, no solo las de una página)
+ *   sin_responder  UNANSWERED de ML, sin las que ya tienen revisión
+ *   respondida     todas las de ML que estén respondidas en ML, aprobadas o editadas
+ *   todas          todas las de ML
+ *
+ * "Sin responder" y "Respondidas" filtran sobre la página de ML: puede venir
+ * alguna menos que 50, pero ninguna queda afuera de la paginación.
+ */
+type Tab = AgentStatus | 'todas';
+const TABS: { id: Tab; label: string; hint: string }[] = [
+  { id: 'pendiente', label: 'Para revisar', hint: AGENT_STATUS_META.pendiente.hint },
+  { id: 'sin_responder', label: 'Sin responder', hint: AGENT_STATUS_META.sin_responder.hint },
+  { id: 'respondida', label: 'Respondidas', hint: AGENT_STATUS_META.respondida.hint },
+  { id: 'todas', label: 'Todas', hint: 'Todas las preguntas de la cuenta' },
+];
+// `agent` es el parámetro viejo: los links guardados siguen andando.
+const tabParam = params.get('tab') ?? params.get('agent');
+const tabElegida: Tab | null = tabParam === 'todas' || isAgentStatus(tabParam) ? (tabParam as Tab) : null;
+
 const sort = params.get('sort') === 'asc' ? 'asc' : 'desc';
 const from = params.get('from') ?? '';
 const to = params.get('to') ?? '';
-const agentParam = params.get('agent');
-const agentFilter: AgentStatus | null = isAgentStatus(agentParam) ? agentParam : null;
 const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
 
 let connections: Connection[] = [];
-let data: QuestionsList | null = null;
+let questions: QuestionListItem[] = [];
+let total = 0;
+let loaded = false;
+let hidden = 0;
+let failedDetails = 0;
+let pendingCount: number | null = null;
 let error: string | null = null;
 let loginUrl: string | null = null;
 let connectionId: number | undefined;
+let tab: Tab = tabElegida ?? 'sin_responder';
 
 try {
   const conn = await getConnections();
   connections = conn.connections;
   loginUrl = conn.login_url;
-
   connectionId = resolveConnectionId(connections, Number(params.get('connection')));
 
   if (connectionId) {
-    data = await listQuestions({
-      connection_id: connectionId,
-      status: status === 'ALL' ? undefined : status,
-      sort,
-      from_date: dayToIso(from),
-      to_date: dayToIso(to, true),
-      offset: (page - 1) * PAGE_SIZE,
-      limit: PAGE_SIZE,
-    });
+    pendingCount = await countPending(connectionId).catch(() => null);
+    // Sin pestaña elegida, se abre donde hay trabajo: revisar si hay pendientes.
+    if (!tabElegida && pendingCount) tab = 'pendiente';
+
+    if (tab === 'pendiente' && agentSource() === 'repuestos') {
+      ({ questions, total, failedDetails } = await loadPending(connectionId));
+    } else {
+      const data = await listQuestions({
+        connection_id: connectionId,
+        status: tab === 'sin_responder' ? 'UNANSWERED' : undefined,
+        sort,
+        from_date: dayToIso(from),
+        to_date: dayToIso(to, true),
+        offset: (page - 1) * PAGE_SIZE,
+        limit: PAGE_SIZE,
+      });
+      questions = data.questions;
+      total = data.total;
+    }
+    loaded = true;
   }
 } catch (err) {
   error = err instanceof ApiError ? err.message : 'Error inesperado al consultar la API.';
@@ -57,17 +95,38 @@ try {
   console.error('[index]', err);
 }
 
-const questions = data?.questions ?? [];
 const agentMap = await getAgentResponses(questions.map((q) => q.id));
-
-const visible = agentFilter ? questions.filter((q) => agentStatusOf(agentMap, q) === agentFilter) : questions;
-
-const total = data?.total ?? 0;
+const visible = tab === 'todas' ? questions : questions.filter((q) => agentStatusOf(agentMap, q) === tab);
+hidden = questions.length - visible.length;
 const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-const selectedConnection = connections.find((c) => c.id === connectionId);
+// Si todo entra en una página, el número que se ve es el real (sin las de otra pestaña).
+const shown = totalPages === 1 ? visible.length : total;
+
+/** Las pendientes de la cuenta, con fechas y orden aplicados acá (no pasan por el filtro de ML). */
+async function loadPending(connection: number) {
+  const rows = await listPending(connection);
+  const details = await Promise.allSettled(rows.map((r) => getQuestion(r.questionId!, connection)));
+  const desde = dayToIso(from);
+  const hasta = dayToIso(to, true);
+  const all = details
+    .filter((d) => d.status === 'fulfilled')
+    .map((d) => ({ ...d.value.question, publication: d.value.publication }) as QuestionListItem)
+    .filter((q) => (!desde || (q.date_created ?? '') >= desde) && (!hasta || (q.date_created ?? '') <= hasta))
+    .sort((a, b) => (a.date_created ?? '').localeCompare(b.date_created ?? '') * (sort === 'asc' ? 1 : -1));
+  return {
+    questions: all.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    total: all.length,
+    failedDetails: details.length - details.filter((d) => d.status === 'fulfilled').length,
+  };
+}
+
+// Resultado del "Aprobar" de una card (vuelve de /api/revision).
+const revisionOk = params.get('revision');
+const revisionError = params.get('revision_error');
 
 function hrefWith(changes: Record<string, string | number | null>) {
   const u = new URL(Astro.url);
+  for (const k of ['agent', 'status', 'revision', 'revision_error']) u.searchParams.delete(k);
   for (const [k, v] of Object.entries(changes)) {
     if (v === null || v === '') u.searchParams.delete(k);
     else u.searchParams.set(k, String(v));
@@ -75,21 +134,12 @@ function hrefWith(changes: Record<string, string | number | null>) {
   return `${u.pathname}${u.search}`;
 }
 
+/** Esta misma lista, sin el aviso: a donde vuelve el "Aprobar" de las cards. */
+const returnTo = hrefWith({});
 ---
 
 <Layout connectionId={connectionId}>
-  <div class="head">
-    <div>
-      <span class="eyebrow">Bandeja de trabajo</span>
-      <h1>Preguntas de clientes</h1>
-      {selectedConnection && <div class="selected-account">Cuenta: <strong>{connectionName(selectedConnection)}</strong></div>}
-      <p class="muted">
-        {data ? `${total} preguntas para el estado de Mercado Libre seleccionado` : 'Revisá las consultas de Mercado Libre'}
-        {agentSource() === 'none' && ' · revisión del agente disponible al conectar la API de repuestos'}
-      </p>
-    </div>
-    <a href={Astro.url.pathname + Astro.url.search} class="btn btn-outline refresh" data-loading="Actualizando…" aria-label="Actualizar preguntas"><span aria-hidden="true">↻</span><span class="refresh-label">Actualizar</span></a>
-  </div>
+  <h1 class="sr-only">Preguntas de clientes</h1>
 
   {
     error && (
@@ -112,73 +162,70 @@ function hrefWith(changes: Record<string, string | number | null>) {
     )
   }
 
-  <div class="section-label">Estado de la respuesta</div>
-  <nav class="agent-filters" aria-label="Filtrar por estado del agente">
-    <a href={hrefWith({ agent: null, page: null })} class:list={['state-tab', { active: !agentFilter }]} aria-current={!agentFilter ? 'page' : undefined}>
-      Todos los estados
-    </a>
-    {
-      AGENT_STATUSES.map((s) => (
-        <a
-          href={hrefWith({ agent: agentFilter === s ? null : s, page: null })}
-          class:list={['state-tab', 'agent-btn', s, { active: agentFilter === s }]}
-          title={AGENT_STATUS_META[s].hint}
-          aria-current={agentFilter === s ? 'page' : undefined}
-        >
-          <span class="state-dot" aria-hidden="true"></span>{s === 'pendiente' ? 'Para revisar' : AGENT_STATUS_META[s].label}
-        </a>
-      ))
-    }
-  </nav>
-
-  <form method="get" class="card filters">
-    {/* La cuenta se elige en la grilla; acá solo se conserva al filtrar. */}
-    {connectionId && <input type="hidden" name="connection" value={connectionId} />}
-    {agentFilter && <input type="hidden" name="agent" value={agentFilter} />}
-
-    <label class="status-filter">
-      Estado en Mercado Libre
-      <select name="status" class="select select-bordered">
-        <option value="UNANSWERED" selected={status === 'UNANSWERED'}>Sin responder</option>
-        <option value="ANSWERED" selected={status === 'ANSWERED'}>Respondidas</option>
-        <option value="ALL" selected={status === 'ALL'}>Todas</option>
-      </select>
-    </label>
-
-    <label>
-      Desde
-      <input type="date" name="from" value={from} class="input input-bordered" />
-    </label>
-    <label>
-      Hasta
-      <input type="date" name="to" value={to} class="input input-bordered" />
-    </label>
-
-    <label>
-      Orden
-      <select name="sort" class="select select-bordered">
-        <option value="desc" selected={sort === 'desc'}>Más nuevas</option>
-        <option value="asc" selected={sort === 'asc'}>Más viejas</option>
-      </select>
-    </label>
-
-    <div class="filter-actions">
-      <button type="submit" class="btn btn-primary" data-loading="Filtrando…">Filtrar</button>
-      <a href={connectionId ? `/?connection=${connectionId}` : "/"} class="btn btn-ghost">Limpiar</a>
+  {revisionOk && <div class="alert alert-success flash" role="status">Respuesta aprobada.</div>}
+  {revisionError && (
+    <div class="alert alert-error flash" role="alert">
+      <strong>No se pudo aprobar.</strong> {revisionError}
     </div>
-  </form>
+  )}
+
+  <div class="toolbar">
+    <nav class="state-tabs" aria-label="Filtrar por estado">
+      {
+        TABS.map((t) => (
+          <a
+            href={hrefWith({ tab: t.id, page: null })}
+            class:list={['state-tab', t.id, { active: tab === t.id }]}
+            title={t.hint}
+            aria-current={tab === t.id ? 'page' : undefined}
+          >
+            {t.id !== 'todas' && <span class="state-dot" aria-hidden="true" />}
+            {t.label}
+            {t.id === 'pendiente' && pendingCount ? <span class="tab-count">{pendingCount}</span> : null}
+          </a>
+        ))
+      }
+    </nav>
+
+    <form method="get" class="controls">
+      {connectionId && <input type="hidden" name="connection" value={connectionId} />}
+      <input type="hidden" name="tab" value={tab} />
+      <label>
+        <span>Desde</span>
+        <input type="date" name="from" value={from} class="input input-sm input-bordered" />
+      </label>
+      <label>
+        <span>Hasta</span>
+        <input type="date" name="to" value={to} class="input input-sm input-bordered" />
+      </label>
+      <label>
+        <span>Orden</span>
+        <select name="sort" class="select select-sm select-bordered">
+          <option value="desc" selected={sort === 'desc'}>Más nuevas</option>
+          <option value="asc" selected={sort === 'asc'}>Más viejas</option>
+        </select>
+      </label>
+      {(from || to) && <a href={hrefWith({ from: null, to: null, page: null })} class="btn btn-sm btn-ghost clear">Quitar fechas</a>}
+      <button type="submit" class="sr-only">Filtrar</button>
+      <a href={Astro.url.pathname + Astro.url.search} class="btn btn-sm btn-outline refresh" data-loading="Actualizando…" aria-label="Actualizar preguntas">
+        <span aria-hidden="true">↻</span><span class="refresh-label">Actualizar</span>
+      </a>
+    </form>
+  </div>
 
   {
-    (from || to || agentFilter) && data && (
+    loaded && (hidden > 0 || failedDetails > 0 || agentSource() === 'none') && (
       <p class="muted note">
-        El filtro del agente se aplica sobre la página actual ({questions.length} de {total}).
+        {hidden > 0 && `${hidden} de esta página de Mercado Libre están en otra pestaña. `}
+        {failedDetails > 0 && `${failedDetails} pendientes no se pudieron traer de Mercado Libre. `}
+        {agentSource() === 'none' && 'La revisión del agente aparece al conectar la API de repuestos.'}
       </p>
     )
   }
 
   <div class="results-head">
-    <div><h2>Consultas</h2><span class="muted">{visible.length} en esta página</span></div>
-    {data && <span class="page-position muted">Página {page} de {totalPages}</span>}
+    <span class="muted">{loaded ? `${shown} ${shown === 1 ? 'pregunta' : 'preguntas'}` : ''}</span>
+    {loaded && totalPages > 1 && <span class="page-position muted">Página {page} de {totalPages}</span>}
   </div>
 
   <section class="list" aria-label="Consultas">
@@ -189,14 +236,15 @@ function hrefWith(changes: Record<string, string | number | null>) {
           agentStatus={agentStatusOf(agentMap, q)}
           agent={agentMap.get(q.id)}
           connectionId={connectionId}
+          returnTo={returnTo}
         />
       ))
     }
-    {data && visible.length === 0 && <div class="card empty muted">No hay preguntas para estos filtros.</div>}
+    {loaded && visible.length === 0 && <div class="card empty muted">No hay preguntas en esta pestaña.</div>}
   </section>
 
   {
-    data && totalPages > 1 && (
+    loaded && totalPages > 1 && (
       <nav class="pager" aria-label="Paginación">
         <a class="btn btn-outline" href={hrefWith({ page: page - 1 })} aria-disabled={page <= 1 ? 'true' : undefined}>
           ← Anterior
@@ -212,42 +260,108 @@ function hrefWith(changes: Record<string, string | number | null>) {
   }
 </Layout>
 
+<dialog class="detalle-modal" id="detalle-modal" aria-label="Detalle de la pregunta">
+  <iframe title="Detalle de la pregunta" id="detalle-frame"></iframe>
+  {/* Mientras carga el detalle (ML + historial tardan 1-2 s): la forma del chat, con la pregunta ya puesta. */}
+  <div class="modal-loading" aria-hidden="true">
+    <div class="sk-chat">
+      <div class="sk-head">
+        <button type="button" class="sk-close" data-cerrar-modal aria-label="Cerrar">✕</button>
+        <span class="sk sk-line" style="width: 38%"></span>
+      </div>
+      <div class="sk-messages">
+        <span class="sk sk-bubble left" style="width: 46%"></span>
+        <span class="sk sk-bubble right" style="width: 58%; height: 64px"></span>
+        <div class="sk-current"><span class="sk-label">Pregunta actual</span><p data-sk-pregunta></p></div>
+        <span class="sk sk-bubble right" style="width: 52%; height: 52px"></span>
+      </div>
+      <div class="sk-composer"><span class="sk sk-line" style="width: 100%; height: 56px"></span></div>
+    </div>
+    <div class="sk-side">
+      <span class="sk" style="width: 100%; aspect-ratio: 1.3"></span>
+      <span class="sk sk-line" style="width: 80%"></span>
+      <span class="sk sk-line" style="width: 40%; height: 18px"></span>
+    </div>
+    <span class="sr-only" role="status">Cargando la pregunta…</span>
+  </div>
+</dialog>
+
 <script>
-  // Al cambiar un filtro se vuelve a la página 1 (el form no envía "page").
-  document.querySelectorAll<HTMLSelectElement>('form.filters select').forEach((el) =>
+  // El detalle se abre en un modal sobre la lista (el mismo detalle, con
+  // embed=1). Ctrl/Cmd/clic del medio sigue abriendo la página completa. En
+  // captura: tiene que ganarle al listener del Layout que muestra "Cargando…".
+  const modal = document.getElementById('detalle-modal') as HTMLDialogElement | null;
+  const frame = document.getElementById('detalle-frame') as HTMLIFrameElement | null;
+  let cambio = false;
+
+  document.addEventListener(
+    'click',
+    (event) => {
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[data-detalle]') : null;
+      if (!link || !modal || !frame) return;
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const url = new URL(link.href);
+      url.searchParams.set('embed', '1');
+      const pregunta = modal.querySelector<HTMLElement>('[data-sk-pregunta]');
+      if (pregunta) pregunta.textContent = link.textContent?.trim() ?? '';
+      modal.classList.add('cargando');
+      frame.src = url.pathname + url.search;
+      modal.showModal();
+    },
+    true,
+  );
+
+  const cerrar = () => modal?.open && modal.close();
+  // El iframe avisa `load` también al vaciarlo (about:blank): solo cuenta la del detalle.
+  frame?.addEventListener('load', () => {
+    if (modal && frame.getAttribute('src') !== 'about:blank') modal.classList.remove('cargando');
+  });
+  modal?.querySelector('[data-cerrar-modal]')?.addEventListener('click', () => cerrar());
+  // Clic en el fondo (fuera del iframe) cierra.
+  modal?.addEventListener('click', (event) => {
+    if (event.target === modal) cerrar();
+  });
+  modal?.addEventListener('close', () => {
+    if (frame) frame.src = 'about:blank';
+    modal?.classList.remove('cargando');
+    // Si se aprobó o editó adentro, la lista (y los conteos) cambiaron.
+    if (cambio) location.reload();
+  });
+  window.addEventListener('message', (event) => {
+    if (event.origin !== location.origin) return;
+    if (event.data?.type === 'detalle:cerrar') cerrar();
+    if (event.data?.type === 'detalle:cambio') cambio = true;
+  });
+
+  // Cualquier cambio en fechas u orden filtra solo, y vuelve a la página 1
+  // (el form no envía "page").
+  document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('form.controls select, form.controls input[type="date"]').forEach((el) =>
     el.addEventListener('change', () => el.form?.requestSubmit()),
   );
 </script>
 
 <style>
-  .head {
+  .toolbar {
     display: flex;
-    justify-content: space-between;
     align-items: flex-end;
-    gap: 12px;
-    margin-bottom: 28px;
-  }
-  .eyebrow { display: block; margin-bottom: 6px; color: var(--link); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-  h1 { margin: 0; font-size: clamp(25px, 3vw, 32px); line-height: 1.2; letter-spacing: -.03em; font-weight: 750; }
-  .selected-account { margin-top: 7px; color: var(--text-muted); font-size: 14px; }
-  .selected-account strong { color: var(--text); }
-  .head p { margin: 7px 0 0; font-size: 14px; }
-  .refresh { background: var(--surface); }
-  .section-label { margin-bottom: 9px; color: var(--text-muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-
-  .agent-filters {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 18px;
+    justify-content: space-between;
+    gap: 12px 20px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
     border-bottom: 1px solid var(--border);
-    overflow-x: auto;
   }
+
+  /* No `.tabs`: es una clase de daisyUI y trae flex-wrap. */
+  .state-tabs { display: flex; gap: 2px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
   .state-tab {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     flex: none;
-    padding: 10px 16px;
+    padding: 10px 14px;
+    margin-bottom: -1px;
     border-bottom: 3px solid transparent;
     color: var(--text-muted);
     font-size: 14px;
@@ -255,35 +369,75 @@ function hrefWith(changes: Record<string, string | number | null>) {
     text-decoration: none !important;
   }
   .state-tab:hover { color: var(--text); background: var(--surface); }
-  .state-tab.active { border-bottom-color: var(--brand); color: var(--brand); }
+  .state-tab.active { border-bottom-color: var(--link); color: var(--link); }
   .state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sin); }
   .pendiente .state-dot { background: var(--revision); }
   .respondida .state-dot { background: var(--si); }
-
-  .filters {
-    display: grid;
-    grid-template-columns: minmax(170px, 1.3fr) repeat(3, minmax(140px, 1fr)) auto;
-    gap: 12px;
-    align-items: end;
-    padding: 16px;
-    margin-bottom: 24px;
-  }
-  .filters label {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  .tab-count {
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--revision);
+    color: #fff;
     font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
+    font-weight: 700;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
   }
-  .filters select, .filters input { width: 100%; min-width: 0; font-size: 13px; background: var(--surface); }
-  .filter-actions { display: flex; gap: 6px; white-space: nowrap; }
-  .note { font-size: 13px; margin: 0 0 10px; }
 
-  .results-head { display: flex; align-items: end; justify-content: space-between; margin: 0 0 12px; }
-  .results-head > div { display: flex; align-items: baseline; gap: 10px; }
-  .results-head h2 { margin: 0; font-size: 18px; font-weight: 750; }
-  .results-head span { font-size: 13px; }
+  .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 8px; }
+  .controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .controls input, .controls select { font-size: 13px; background: var(--surface); }
+  .controls input[type='date'] { width: 9.5rem; }
+  .refresh { background: var(--surface); gap: 6px; }
+
+  .note { font-size: 13px; margin: 0 0 10px; }
+  .flash { margin-bottom: 14px; }
+
+  .detalle-modal {
+    width: min(1180px, calc(100vw - 48px));
+    height: calc(100dvh - 48px);
+    max-width: none;
+    max-height: none;
+    margin: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 14px;
+    background: var(--bg);
+    box-shadow: 0 24px 80px rgb(0 0 0 / .35);
+    overflow: hidden;
+  }
+  .detalle-modal::backdrop { background: rgb(10 20 32 / .55); }
+  .detalle-modal iframe { display: block; width: 100%; height: 100%; border: 0; }
+
+  /* Esqueleto del modal: encima del iframe hasta que el detalle carga. */
+  .modal-loading { display: none; position: absolute; inset: 0; gap: 12px; padding: 12px; background: var(--bg); }
+  .detalle-modal.cargando .modal-loading { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+  .sk-chat, .sk-side { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; }
+  .sk-side { gap: 12px; padding: 18px; }
+  .sk-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+  .sk-close { border: 0; background: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 0 4px; }
+  .sk-messages { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 16px 18px; background: var(--bg); }
+  .sk-composer { padding: 12px 18px 14px; border-top: 1px solid var(--border); }
+  .sk {
+    display: block;
+    border-radius: 8px;
+    background: linear-gradient(90deg, var(--surface-2) 0%, var(--border) 45%, var(--surface-2) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.15s ease-in-out infinite;
+  }
+  .sk-line { height: 14px; }
+  .sk-bubble { height: 40px; border-radius: 12px; }
+  .sk-bubble.right { align-self: flex-end; }
+  .sk-current { align-self: flex-start; max-width: 78%; padding: 8px 12px; border: 1px solid var(--link); border-radius: 12px; border-bottom-left-radius: 4px; background: var(--surface); box-shadow: 0 0 0 1px var(--link); }
+  .sk-current p { margin: 0; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+  .sk-label { display: block; margin-bottom: 2px; font-size: 11px; font-weight: 700; color: var(--link); text-transform: uppercase; letter-spacing: .04em; }
+  @media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+  @media (max-width: 900px) {
+    .detalle-modal.cargando .modal-loading { grid-template-columns: 1fr; }
+    .sk-side { display: none; }
+  }
+  .results-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; font-size: 13px; }
   .list { display: flex; flex-direction: column; gap: 8px; }
   .empty { padding: 32px; text-align: center; }
 
@@ -295,14 +449,19 @@ function hrefWith(changes: Record<string, string | number | null>) {
     margin-top: 20px;
   }
 
-  @media (max-width: 1000px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 900px) {
+    .toolbar { border-bottom: 0; }
+    .state-tabs { width: 100%; border-bottom: 1px solid var(--border); }
+    .controls { width: 100%; padding-bottom: 0; }
+  }
   @media (max-width: 640px) {
-    .head { align-items: flex-start; }
-    .refresh { flex: none; width: 38px; padding: 0; font-size: 20px; }
+    .detalle-modal { width: 100vw; height: 100dvh; border-radius: 0; }
+    .modal-loading { padding: 0; }
+    .sk-chat { border: 0; border-radius: 0; }
+    .controls label { flex: 1 1 calc(50% - 8px); flex-direction: column; align-items: stretch; gap: 4px; }
+    .controls input[type='date'] { width: 100%; }
+    .refresh { flex: none; width: 34px; padding: 0; font-size: 18px; align-self: flex-end; }
     .refresh-label { display: none; }
-    .filters { gap: 10px; padding: 12px; }
-    .filters .status-filter, .filter-actions { grid-column: 1 / -1; }
-    .filter-actions .btn { flex: 1; }
     .page-position { display: none; }
   }
 </style>
