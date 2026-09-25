@@ -45,7 +45,9 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
 ---
 
 <Layout title={q ? `Pregunta ${q.id}` : 'Pregunta'} connectionId={connectionParam}>
-  <a href={backHref} class="back">← Volver a preguntas</a>
+  <a href={backHref} class="back">← Volver a la bandeja</a>
+
+  {q && <div class="page-head"><span class="eyebrow">Detalle de consulta</span><h1>Pregunta #{q.id}</h1><p class="muted">Revisá el contexto y resolvé la respuesta del agente.</p></div>}
 
   {error && <div class="alert alert-error" role="alert"><strong>No se pudo cargar la pregunta.</strong> {error}</div>}
 
@@ -62,7 +64,7 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
               {q.from?.nickname && <span>· {q.from.nickname}</span>}
               <span>· #{q.id}</span>
             </div>
-            <h1 class="question">{q.text}</h1>
+            <h2 class="question">{q.text}</h2>
 
             {q.answer?.text ? (
               <div class="answer">
@@ -76,7 +78,7 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
 
           <section class:list={['card', 'block', 'agent', agentStatus]}>
             <div class="agent-head">
-              <h2>Respuesta del agente</h2>
+              <div><span class="eyebrow">Acción principal</span><h2>Respuesta propuesta</h2></div>
               <AgentBadge status={agentStatus} size="md" />
             </div>
             <p class="muted hint">{AGENT_STATUS_META[agentStatus].hint}.</p>
@@ -103,12 +105,10 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
                     <button class="btn btn-primary" type="submit" name="status" value="aprobado" data-loading="Aprobando…">
                       Aprobar
                     </button>
-                    <button class="btn" type="submit" name="status" value="desaprobado" data-loading="Desaprobando…">
+                    <button class="btn btn-outline" type="submit" name="status" value="desaprobado" data-loading="Desaprobando…">
                       Desaprobar
                     </button>
-                    <span class="muted">
-                      Por ahora solo registra la decisión: no se publica en Mercado Libre (sigue como nota privada).
-                    </span>
+                    <p class="muted decision-note">La decisión se registra internamente. No publica la respuesta en Mercado Libre.</p>
                   </form>
                 ) : (
                   <p class:list={['decision', agent.status]}>
@@ -189,18 +189,22 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
 
 <style>
   .back { display: inline-block; margin-bottom: 14px; }
+  .page-head { margin: 2px 0 24px; }
+  .eyebrow { display: block; margin-bottom: 6px; color: var(--link); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .page-head h1 { margin: 0; font-size: clamp(25px, 3vw, 32px); line-height: 1.2; letter-spacing: -.03em; }
+  .page-head p { margin: 6px 0 0; font-size: 14px; }
   .grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    gap: 20px;
     align-items: start;
   }
   .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .block { padding: 18px 20px; }
+  .block { padding: 24px; }
   .meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
   .ml-status { font-weight: 700; text-transform: uppercase; font-size: 12px; color: var(--revision); }
   .ml-status.answered { color: var(--si); }
-  .question { font-size: 22px; margin: 8px 0 16px; overflow-wrap: anywhere; }
+  .question { font-size: clamp(19px, 2vw, 24px); line-height: 1.4; margin: 12px 0 18px; overflow-wrap: anywhere; }
   .answer {
     border-left: 3px solid var(--si);
     background: var(--surface-2);
@@ -210,38 +214,42 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
   .answer p { margin: 4px 0 0; }
   .label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
 
-  .agent { border-top: 4px solid var(--c, var(--sin)); }
+  .agent { order: -1; border-top: 4px solid var(--c, var(--sin)); }
   .agent.pendiente { --c: var(--revision); }
   .agent.respondida { --c: var(--sin-revision); }
   .decision { font-size: 14px; font-weight: 600; margin: 0; }
   .decision.aprobado { color: var(--si); }
   .decision.desaprobado { color: var(--no); }
   .alert { margin: 0 0 12px; }
-  .agent-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  h2 { margin: 0; font-size: 17px; }
-  .hint { margin: 4px 0 12px; font-size: 14px; }
+  .agent-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  h2 { margin: 0; font-size: 19px; }
+  .hint { margin: 7px 0 17px; font-size: 13px; }
   blockquote {
-    margin: 0 0 12px;
-    padding: 12px 14px;
+    margin: 0;
+    padding: 18px 20px;
     background: var(--surface-2);
-    border-radius: 8px;
+    border-radius: 10px;
     border-left: 3px solid var(--c, var(--sin));
+    font-size: 17px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
   }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
   dt { color: var(--text-muted); }
   dd { margin: 0; overflow-wrap: anywhere; }
-  .hitl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; font-size: 13px; }
+  .hitl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 13px; }
+  .decision-note { flex-basis: 100%; margin: 2px 0 0; font-size: 12px; }
   .hitl .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 
   .item img {
     width: 100%;
-    aspect-ratio: 1;
+    aspect-ratio: 1.3;
     object-fit: contain;
     background-color: #fff;
     border-radius: 8px;
     margin: 12px 0;
   }
-  .item h3 { font-size: 15px; margin: 0 0 4px; }
+  .item h3 { font-size: 15px; margin: 0 0 4px; line-height: 1.4; }
   .price { font-size: 22px; font-weight: 700; margin: 0 0 12px; }
   details { margin-top: 14px; }
   summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
@@ -249,5 +257,11 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
 
   @media (max-width: 860px) {
     .grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .block { padding: 18px; }
+    .agent-head { flex-wrap: wrap; }
+    blockquote { font-size: 15px; padding: 14px; }
+    .hitl .btn { flex: 1; }
   }
 </style>

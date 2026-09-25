@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import QuestionCard from '../components/QuestionCard.astro';
 import { ApiError, getConnections, listQuestions } from '../lib/ml-api';
-import { resolveConnectionId } from '../lib/accounts';
+import { connectionName, resolveConnectionId } from '../lib/accounts';
 import {
   AGENT_STATUSES,
   AGENT_STATUS_META,
@@ -64,6 +64,7 @@ const visible = agentFilter ? questions.filter((q) => agentStatusOf(agentMap, q)
 
 const total = data?.total ?? 0;
 const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+const selectedConnection = connections.find((c) => c.id === connectionId);
 
 function hrefWith(changes: Record<string, string | number | null>) {
   const u = new URL(Astro.url);
@@ -79,13 +80,15 @@ function hrefWith(changes: Record<string, string | number | null>) {
 <Layout connectionId={connectionId}>
   <div class="head">
     <div>
+      <span class="eyebrow">Bandeja de trabajo</span>
       <h1>Preguntas de clientes</h1>
+      {selectedConnection && <div class="selected-account">Cuenta: <strong>{connectionName(selectedConnection)}</strong></div>}
       <p class="muted">
-        {data ? `${total} preguntas en Mercado Libre` : 'Mercado Libre'}
+        {data ? `${total} preguntas para el estado de Mercado Libre seleccionado` : 'Revisá las consultas de Mercado Libre'}
         {agentSource() === 'none' && ' · revisión del agente disponible al conectar la API de repuestos'}
       </p>
     </div>
-    <a href={Astro.url.pathname + Astro.url.search} class="btn" data-loading="Actualizando…">↻ Actualizar</a>
+    <a href={Astro.url.pathname + Astro.url.search} class="btn btn-outline refresh" data-loading="Actualizando…" aria-label="Actualizar preguntas"><span aria-hidden="true">↻</span><span class="refresh-label">Actualizar</span></a>
   </div>
 
   {
@@ -109,32 +112,33 @@ function hrefWith(changes: Record<string, string | number | null>) {
     )
   }
 
-  <div class="agent-filters" role="group" aria-label="Filtrar por estado del agente">
-    <a href={hrefWith({ agent: null, page: null })} class:list={['btn', { active: !agentFilter }]} aria-pressed={!agentFilter}>
-      Todas
+  <div class="section-label">Estado de la respuesta</div>
+  <nav class="agent-filters" aria-label="Filtrar por estado del agente">
+    <a href={hrefWith({ agent: null, page: null })} class:list={['state-tab', { active: !agentFilter }]} aria-current={!agentFilter ? 'page' : undefined}>
+      Todos los estados
     </a>
     {
       AGENT_STATUSES.map((s) => (
         <a
           href={hrefWith({ agent: agentFilter === s ? null : s, page: null })}
-          class:list={['btn', 'agent-btn', s, { active: agentFilter === s }]}
+          class:list={['state-tab', 'agent-btn', s, { active: agentFilter === s }]}
           title={AGENT_STATUS_META[s].hint}
-          aria-pressed={agentFilter === s}
+          aria-current={agentFilter === s ? 'page' : undefined}
         >
-          {AGENT_STATUS_META[s].label}
+          <span class="state-dot" aria-hidden="true"></span>{s === 'pendiente' ? 'Para revisar' : AGENT_STATUS_META[s].label}
         </a>
       ))
     }
-  </div>
+  </nav>
 
   <form method="get" class="card filters">
-    {/* La cuenta se elige en el nav; acá solo se conserva al filtrar. */}
+    {/* La cuenta se elige en la grilla; acá solo se conserva al filtrar. */}
     {connectionId && <input type="hidden" name="connection" value={connectionId} />}
     {agentFilter && <input type="hidden" name="agent" value={agentFilter} />}
 
-    <label>
-      Estado ML
-      <select name="status">
+    <label class="status-filter">
+      Estado en Mercado Libre
+      <select name="status" class="select select-bordered">
         <option value="UNANSWERED" selected={status === 'UNANSWERED'}>Sin responder</option>
         <option value="ANSWERED" selected={status === 'ANSWERED'}>Respondidas</option>
         <option value="ALL" selected={status === 'ALL'}>Todas</option>
@@ -143,16 +147,16 @@ function hrefWith(changes: Record<string, string | number | null>) {
 
     <label>
       Desde
-      <input type="date" name="from" value={from} />
+      <input type="date" name="from" value={from} class="input input-bordered" />
     </label>
     <label>
       Hasta
-      <input type="date" name="to" value={to} />
+      <input type="date" name="to" value={to} class="input input-bordered" />
     </label>
 
     <label>
       Orden
-      <select name="sort">
+      <select name="sort" class="select select-bordered">
         <option value="desc" selected={sort === 'desc'}>Más nuevas</option>
         <option value="asc" selected={sort === 'asc'}>Más viejas</option>
       </select>
@@ -160,19 +164,24 @@ function hrefWith(changes: Record<string, string | number | null>) {
 
     <div class="filter-actions">
       <button type="submit" class="btn btn-primary" data-loading="Filtrando…">Filtrar</button>
-      <a href={connectionId ? `/?connection=${connectionId}` : "/"} class="btn">Limpiar</a>
+      <a href={connectionId ? `/?connection=${connectionId}` : "/"} class="btn btn-ghost">Limpiar</a>
     </div>
   </form>
 
   {
     (from || to || agentFilter) && data && (
       <p class="muted note">
-        Los filtros de fecha y de agente se aplican sobre la página actual ({questions.length} de {total}).
+        El filtro del agente se aplica sobre la página actual ({questions.length} de {total}).
       </p>
     )
   }
 
-  <section class="list">
+  <div class="results-head">
+    <div><h2>Consultas</h2><span class="muted">{visible.length} en esta página</span></div>
+    {data && <span class="page-position muted">Página {page} de {totalPages}</span>}
+  </div>
+
+  <section class="list" aria-label="Consultas">
     {
       visible.map((q) => (
         <QuestionCard
@@ -189,13 +198,13 @@ function hrefWith(changes: Record<string, string | number | null>) {
   {
     data && totalPages > 1 && (
       <nav class="pager" aria-label="Paginación">
-        <a class="btn" href={hrefWith({ page: page - 1 })} aria-disabled={page <= 1 ? 'true' : undefined}>
+        <a class="btn btn-outline" href={hrefWith({ page: page - 1 })} aria-disabled={page <= 1 ? 'true' : undefined}>
           ← Anterior
         </a>
         <span class="muted">
           Página {page} de {totalPages}
         </span>
-        <a class="btn" href={hrefWith({ page: page + 1 })} aria-disabled={page >= totalPages ? 'true' : undefined}>
+        <a class="btn btn-outline" href={hrefWith({ page: page + 1 })} aria-disabled={page >= totalPages ? 'true' : undefined}>
           Siguiente →
         </a>
       </nav>
@@ -216,57 +225,66 @@ function hrefWith(changes: Record<string, string | number | null>) {
     justify-content: space-between;
     align-items: flex-end;
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 28px;
   }
-  h1 { margin: 0; font-size: 24px; }
-  .head p { margin: 2px 0 0; }
+  .eyebrow { display: block; margin-bottom: 6px; color: var(--link); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  h1 { margin: 0; font-size: clamp(25px, 3vw, 32px); line-height: 1.2; letter-spacing: -.03em; font-weight: 750; }
+  .selected-account { margin-top: 7px; color: var(--text-muted); font-size: 14px; }
+  .selected-account strong { color: var(--text); }
+  .head p { margin: 7px 0 0; font-size: 14px; }
+  .refresh { background: var(--surface); }
+  .section-label { margin-bottom: 9px; color: var(--text-muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 
   .agent-filters {
     display: flex;
-    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .state-tab {
+    display: inline-flex;
+    align-items: center;
     gap: 8px;
-    margin-bottom: 16px;
+    flex: none;
+    padding: 10px 16px;
+    border-bottom: 3px solid transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 650;
+    text-decoration: none !important;
   }
-  .agent-filters .btn.active {
-    background: var(--brand);
-    border-color: var(--brand);
-    color: var(--brand-contrast);
-  }
-  .agent-btn.pendiente.active { background: var(--revision-bg); border-color: var(--revision); color: var(--revision); }
-  .agent-btn.respondida.active { background: var(--si-bg); border-color: var(--si); color: var(--si); }
-  .agent-btn.sin_responder.active { background: var(--sin-bg); border-color: var(--sin); color: var(--sin); }
+  .state-tab:hover { color: var(--text); background: var(--surface); }
+  .state-tab.active { border-bottom-color: var(--brand); color: var(--brand); }
+  .state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sin); }
+  .pendiente .state-dot { background: var(--revision); }
+  .respondida .state-dot { background: var(--si); }
 
   .filters {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(170px, 1.3fr) repeat(3, minmax(140px, 1fr)) auto;
     gap: 12px;
-    align-items: flex-end;
-    padding: 12px 14px;
-    margin-bottom: 12px;
+    align-items: end;
+    padding: 16px;
+    margin-bottom: 24px;
   }
   .filters label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    font-size: 12px;
+    gap: 6px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
   }
-  .filters select,
-  .filters input {
-    font: inherit;
-    font-size: 14px;
-    padding: 7px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-    min-width: 140px;
-  }
-  .filter-actions { display: flex; gap: 8px; margin-left: auto; }
+  .filters select, .filters input { width: 100%; min-width: 0; font-size: 13px; background: var(--surface); }
+  .filter-actions { display: flex; gap: 6px; white-space: nowrap; }
   .note { font-size: 13px; margin: 0 0 10px; }
 
-  .list { display: flex; flex-direction: column; gap: 10px; }
+  .results-head { display: flex; align-items: end; justify-content: space-between; margin: 0 0 12px; }
+  .results-head > div { display: flex; align-items: baseline; gap: 10px; }
+  .results-head h2 { margin: 0; font-size: 18px; font-weight: 750; }
+  .results-head span { font-size: 13px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
   .empty { padding: 32px; text-align: center; }
 
   .pager {
@@ -277,10 +295,14 @@ function hrefWith(changes: Record<string, string | number | null>) {
     margin-top: 20px;
   }
 
-  @media (max-width: 760px) {
-    .filters label { flex: 1 1 140px; }
-    .filters select, .filters input { min-width: 0; width: 100%; }
-    .filter-actions { margin-left: 0; width: 100%; }
-    .filter-actions .btn { flex: 1; justify-content: center; }
+  @media (max-width: 1000px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) {
+    .head { align-items: flex-start; }
+    .refresh { flex: none; width: 38px; padding: 0; font-size: 20px; }
+    .refresh-label { display: none; }
+    .filters { gap: 10px; padding: 12px; }
+    .filters .status-filter, .filter-actions { grid-column: 1 / -1; }
+    .filter-actions .btn { flex: 1; }
+    .page-position { display: none; }
   }
 </style>
