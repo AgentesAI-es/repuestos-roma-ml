@@ -138,7 +138,7 @@ function hrefWith(changes: Record<string, string | number | null>) {
 const returnTo = hrefWith({});
 ---
 
-<Layout connectionId={connectionId}>
+<Layout connectionId={connectionId} fit>
   <h1 class="sr-only">Preguntas de clientes</h1>
 
   {
@@ -223,9 +223,19 @@ const returnTo = hrefWith({});
     )
   }
 
+  {/* La página no scrollea: la lista vive en esta card y scrollea adentro. */}
+  <div class="list-card">
   <div class="results-head">
     <span class="muted">{loaded ? `${shown} ${shown === 1 ? 'pregunta' : 'preguntas'}` : ''}</span>
-    {loaded && totalPages > 1 && <span class="page-position muted">Página {page} de {totalPages}</span>}
+    {
+      loaded && totalPages > 1 && (
+        <nav class="pager" aria-label="Paginación">
+          <a class="btn btn-xs btn-ghost" href={hrefWith({ page: page - 1 })} aria-disabled={page <= 1 ? 'true' : undefined} aria-label="Página anterior">←</a>
+          <span class="muted">Página {page} de {totalPages}</span>
+          <a class="btn btn-xs btn-ghost" href={hrefWith({ page: page + 1 })} aria-disabled={page >= totalPages ? 'true' : undefined} aria-label="Página siguiente">→</a>
+        </nav>
+      )
+    }
   </div>
 
   <section class="list" aria-label="Consultas">
@@ -241,23 +251,13 @@ const returnTo = hrefWith({});
       ))
     }
     {loaded && visible.length === 0 && <div class="card empty muted">No hay preguntas en esta pestaña.</div>}
+    {
+      loaded && totalPages > 1 && page < totalPages && (
+        <a class="btn btn-outline more" href={hrefWith({ page: page + 1 })}>Página siguiente →</a>
+      )
+    }
   </section>
-
-  {
-    loaded && totalPages > 1 && (
-      <nav class="pager" aria-label="Paginación">
-        <a class="btn btn-outline" href={hrefWith({ page: page - 1 })} aria-disabled={page <= 1 ? 'true' : undefined}>
-          ← Anterior
-        </a>
-        <span class="muted">
-          Página {page} de {totalPages}
-        </span>
-        <a class="btn btn-outline" href={hrefWith({ page: page + 1 })} aria-disabled={page >= totalPages ? 'true' : undefined}>
-          Siguiente →
-        </a>
-      </nav>
-    )
-  }
+  </div>
 </Layout>
 
 <dialog class="detalle-modal" id="detalle-modal" aria-label="Detalle de la pregunta">
@@ -437,17 +437,41 @@ const returnTo = hrefWith({});
     .detalle-modal.cargando .modal-loading { grid-template-columns: 1fr; }
     .sk-side { display: none; }
   }
-  .results-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; font-size: 13px; }
-  .list { display: flex; flex-direction: column; gap: 8px; }
-  .empty { padding: 32px; text-align: center; }
-
-  .pager {
+  .list-card {
+    flex: 1;
+    min-height: 0;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 16px;
-    margin-top: 20px;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-2);
+    overflow: hidden;
   }
+  .results-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 13px;
+  }
+  .list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+  }
+  .empty { padding: 32px; text-align: center; }
+  .more { align-self: center; margin: 6px 0 4px; }
+  .pager { display: flex; align-items: center; gap: 6px; }
+  .pager .btn { font-size: 15px; }
 
   @media (max-width: 900px) {
     .toolbar { border-bottom: 0; }
@@ -462,6 +486,7 @@ const returnTo = hrefWith({});
     .controls input[type='date'] { width: 100%; }
     .refresh { flex: none; width: 34px; padding: 0; font-size: 18px; align-self: flex-end; }
     .refresh-label { display: none; }
-    .page-position { display: none; }
+    .list { padding: 8px; }
+    .list-card { border-radius: 12px; }
   }
 </style>

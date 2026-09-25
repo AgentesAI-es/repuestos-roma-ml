@@ -15,9 +15,11 @@ interface Props {
   fill?: boolean;
   /** Sin barra ni cuentas ni márgenes: el detalle dentro del modal de la bandeja. */
   bare?: boolean;
+  /** La página ocupa justo la pantalla y no scrollea: el contenido maneja su propio scroll (la bandeja). */
+  fit?: boolean;
 }
 
-const { title, connectionId, accounts = true, fill = false, bare = false } = Astro.props;
+const { title, connectionId, accounts = true, fill = false, bare = false, fit = false } = Astro.props;
 const source = agentSource();
 
 // Las cuentas se cachean un minuto en ml-api. Si la API de ML falla,
@@ -46,7 +48,7 @@ function iniciales(nombre: string) {
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title ? `${title} · Preguntas ML` : 'Preguntas ML · Repuestos Roma'}</title>
   </head>
-  <body>
+  <body class:list={{ fit }}>
     <div id="nav-progress" class="nav-progress" hidden></div>
     <p id="nav-status" class="sr-only" aria-live="polite"></p>
     {!bare && <header class="topbar">
@@ -263,6 +265,16 @@ function iniciales(nombre: string) {
   }
   main { padding-block: 30px 56px; }
   main.fill { padding-block: 14px 16px; }
+
+  /* Modo "cabe en la pantalla": barra y cuentas arriba, y main toma el resto
+     como columna flex; lo que scrollea es un hijo de main (min-height: 0). */
+  body.fit { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  body.fit > .topbar, body.fit > .accounts { flex: none; }
+  body.fit > main { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; padding-block: 18px 16px; }
+  /* En una pantalla muy baja no entra: vuelve el scroll normal de la página. */
+  @media (max-height: 540px) {
+    body.fit { height: auto; overflow: visible; display: block; }
+  }
   main.bare { max-width: none; padding: 0; }
 
   .accounts {
@@ -365,9 +377,11 @@ function iniciales(nombre: string) {
     .metrics { justify-content: space-between; margin-left: 0; }
   }
 
+  /* En celular las cuentas no se apilan (se comían la pantalla): van en una
+     fila que se desliza de costado, y se ve un pedazo de la siguiente. */
   @media (max-width: 640px) {
-    .accounts-inner { grid-template-columns: minmax(0, 1fr); }
-    .account { flex-direction: row; align-items: center; }
+    .accounts-inner { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-block: 10px; }
+    .account { flex: 0 0 82%; scroll-snap-align: start; flex-direction: row; align-items: center; }
   }
 
   @media (max-width: 560px) {
