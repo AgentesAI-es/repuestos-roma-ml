@@ -1,5 +1,6 @@
 ---
 import AgentBadge from './AgentBadge.astro';
+import { REVISION_LABEL } from '../lib/agent-responses';
 import { formatDate, formatPrice, timeAgo, ML_STATUS_LABEL } from '../lib/format';
 import type { AgentResponse, AgentStatus, QuestionListItem } from '../lib/types';
 
@@ -49,8 +50,8 @@ const answered = q.status === 'ANSWERED';
           <span class="reply-label">Respuesta publicada:</span> {q.answer.text}
         </p>
       ) : agent?.respuesta ? (
-        <p class="reply proposed">
-          <span class="reply-label">Respuesta del agente:</span> {agent.respuesta}
+        <p class:list={['reply', 'proposed', agent.status]}>
+          <span class="reply-label">Respuesta del agente ({REVISION_LABEL[agent.status]}):</span> {agent.respuesta}
         </p>
       ) : null
     }
@@ -80,7 +81,7 @@ const answered = q.status === 'ANSWERED';
     overflow: hidden;
     font-size: 24px;
   }
-  .thumb img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; background-color: #fff; }
   .body { min-width: 0; }
   .meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; align-items: center; }
   .ml-status {
@@ -111,6 +112,8 @@ const answered = q.status === 'ANSWERED';
     overflow-wrap: anywhere;
   }
   .reply.proposed { border-left-color: var(--revision); }
+  .reply.proposed.aprobado { border-left-color: var(--si); }
+  .reply.proposed.desaprobado { border-left-color: var(--no); }
   .reply-label { font-weight: 600; color: var(--text-muted); }
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
   .detail { font-size: 13px; padding: 6px 10px; }

@@ -41,8 +41,22 @@ async function request<T>(path: string, query: Query = {}): Promise<T> {
   return body as T;
 }
 
-export function getConnections() {
-  return request<ConnectionsList>('/auth/connections');
+// El nav pide las cuentas en cada página: se cachean un minuto. Solo se cachea
+// el éxito, así un error no queda pegado.
+const CONNECTIONS_TTL_MS = 60_000;
+let connectionsCache: { at: number; value: ConnectionsList } | null = null;
+
+export async function getConnections() {
+  if (connectionsCache && Date.now() - connectionsCache.at < CONNECTIONS_TTL_MS) return connectionsCache.value;
+  const value = await request<ConnectionsList>('/auth/connections');
+  connectionsCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Cuántas preguntas tiene una cuenta en ese estado: el `total` de ML, pidiendo una sola. */
+export async function countQuestions(connection_id: number, status: 'UNANSWERED' | 'ANSWERED') {
+  const { total } = await request<QuestionsList>('/questions', { connection_id, status, limit: 1 });
+  return total;
 }
 
 export interface ListQuestionsParams {

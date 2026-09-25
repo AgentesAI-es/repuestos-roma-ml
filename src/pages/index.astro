@@ -1,8 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import QuestionCard from '../components/QuestionCard.astro';
-import { ML_CONNECTION_ID } from 'astro:env/server';
 import { ApiError, getConnections, listQuestions } from '../lib/ml-api';
+import { resolveConnectionId } from '../lib/accounts';
 import {
   AGENT_STATUSES,
   AGENT_STATUS_META,
@@ -36,8 +36,7 @@ try {
   connections = conn.connections;
   loginUrl = conn.login_url;
 
-  const requested = Number(params.get('connection')) || Number(ML_CONNECTION_ID);
-  connectionId = connections.find((c) => c.id === requested)?.id ?? connections[0]?.id;
+  connectionId = resolveConnectionId(connections, Number(params.get('connection')));
 
   if (connectionId) {
     data = await listQuestions({
@@ -61,10 +60,7 @@ try {
 const questions = data?.questions ?? [];
 const agentMap = await getAgentResponses(questions.map((q) => q.id));
 
-const counts = Object.fromEntries(AGENT_STATUSES.map((s) => [s, 0])) as Record<AgentStatus, number>;
-for (const q of questions) counts[agentStatusOf(agentMap, q.id)]++;
-
-const visible = agentFilter ? questions.filter((q) => agentStatusOf(agentMap, q.id) === agentFilter) : questions;
+const visible = agentFilter ? questions.filter((q) => agentStatusOf(agentMap, q) === agentFilter) : questions;
 
 const total = data?.total ?? 0;
 const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -78,10 +74,9 @@ function hrefWith(changes: Record<string, string | number | null>) {
   return `${u.pathname}${u.search}`;
 }
 
-const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.user_id}`;
 ---
 
-<Layout>
+<Layout connectionId={connectionId}>
   <div class="head">
     <div>
       <h1>Preguntas de clientes</h1>
@@ -90,7 +85,7 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
         {agentSource() === 'none' && ' · revisión del agente disponible al conectar la API de repuestos'}
       </p>
     </div>
-    <a href={Astro.url.pathname + Astro.url.search} class="btn">↻ Actualizar</a>
+    <a href={Astro.url.pathname + Astro.url.search} class="btn" data-loading="Actualizando…">↻ Actualizar</a>
   </div>
 
   {
@@ -114,38 +109,28 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
     )
   }
 
-  <section class="stats" aria-label="Resumen por estado del agente">
+  <div class="agent-filters" role="group" aria-label="Filtrar por estado del agente">
+    <a href={hrefWith({ agent: null, page: null })} class:list={['btn', { active: !agentFilter }]} aria-pressed={!agentFilter}>
+      Todas
+    </a>
     {
       AGENT_STATUSES.map((s) => (
         <a
-          href={hrefWith({ agent: agentFilter === s ? null : s })}
-          class:list={['card', 'stat', s, { active: agentFilter === s }]}
+          href={hrefWith({ agent: agentFilter === s ? null : s, page: null })}
+          class:list={['btn', 'agent-btn', s, { active: agentFilter === s }]}
           title={AGENT_STATUS_META[s].hint}
+          aria-pressed={agentFilter === s}
         >
-          <span class="stat-label">{AGENT_STATUS_META[s].label}</span>
-          <span class="stat-value">{counts[s]}</span>
-          <span class="stat-hint">{AGENT_STATUS_META[s].hint}</span>
+          {AGENT_STATUS_META[s].label}
         </a>
       ))
     }
-  </section>
+  </div>
 
   <form method="get" class="card filters">
-    {
-      connections.length > 1 && (
-        <label>
-          Cuenta
-          <select name="connection">
-            {connections.map((c) => (
-              <option value={c.id} selected={c.id === connectionId}>
-                {connectionName(c)}
-              </option>
-            ))}
-          </select>
-        </label>
-      )
-    }
-    {connections.length === 1 && <input type="hidden" name="connection" value={connectionId} />}
+    {/* La cuenta se elige en el nav; acá solo se conserva al filtrar. */}
+    {connectionId && <input type="hidden" name="connection" value={connectionId} />}
+    {agentFilter && <input type="hidden" name="agent" value={agentFilter} />}
 
     <label>
       Estado ML
@@ -153,20 +138,6 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
         <option value="UNANSWERED" selected={status === 'UNANSWERED'}>Sin responder</option>
         <option value="ANSWERED" selected={status === 'ANSWERED'}>Respondidas</option>
         <option value="ALL" selected={status === 'ALL'}>Todas</option>
-      </select>
-    </label>
-
-    <label>
-      Agente
-      <select name="agent">
-        <option value="">Todos</option>
-        {
-          AGENT_STATUSES.map((s) => (
-            <option value={s} selected={agentFilter === s}>
-              {AGENT_STATUS_META[s].label}
-            </option>
-          ))
-        }
       </select>
     </label>
 
@@ -188,8 +159,8 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
     </label>
 
     <div class="filter-actions">
-      <button type="submit" class="btn btn-primary">Filtrar</button>
-      <a href="/" class="btn">Limpiar</a>
+      <button type="submit" class="btn btn-primary" data-loading="Filtrando…">Filtrar</button>
+      <a href={connectionId ? `/?connection=${connectionId}` : "/"} class="btn">Limpiar</a>
     </div>
   </form>
 
@@ -206,7 +177,7 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
       visible.map((q) => (
         <QuestionCard
           question={q}
-          agentStatus={agentStatusOf(agentMap, q.id)}
+          agentStatus={agentStatusOf(agentMap, q)}
           agent={agentMap.get(q.id)}
           connectionId={connectionId}
         />
@@ -250,29 +221,20 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
   h1 { margin: 0; font-size: 24px; }
   .head p { margin: 2px 0 0; }
 
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+  .agent-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 16px;
   }
-  .stat {
-    display: flex;
-    flex-direction: column;
-    padding: 12px 14px;
-    color: var(--text);
-    text-decoration: none !important;
-    border-top: 4px solid var(--c);
-    transition: transform 0.1s;
+  .agent-filters .btn.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: var(--brand-contrast);
   }
-  .stat:hover { transform: translateY(-1px); }
-  .stat.active { outline: 2px solid var(--c); }
-  .stat.revision { --c: var(--revision); }
-  .stat.sin_revision { --c: var(--sin-revision); }
-  .stat.sin_evaluar { --c: var(--sin); }
-  .stat-label { font-weight: 600; color: var(--c); }
-  .stat-value { font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
-  .stat-hint { font-size: 12px; color: var(--text-muted); }
+  .agent-btn.pendiente.active { background: var(--revision-bg); border-color: var(--revision); color: var(--revision); }
+  .agent-btn.respondida.active { background: var(--si-bg); border-color: var(--si); color: var(--si); }
+  .agent-btn.sin_responder.active { background: var(--sin-bg); border-color: var(--sin); color: var(--sin); }
 
   .filters {
     display: flex;
@@ -316,8 +278,6 @@ const connectionName = (c: Connection) => c.label || c.nickname || `Cuenta ${c.u
   }
 
   @media (max-width: 760px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .stat-hint { display: none; }
     .filters label { flex: 1 1 140px; }
     .filters select, .filters input { min-width: 0; width: 100%; }
     .filter-actions { margin-left: 0; width: 100%; }

@@ -2,7 +2,14 @@
 import Layout from '../../layouts/Layout.astro';
 import AgentBadge from '../../components/AgentBadge.astro';
 import { ApiError, getQuestion } from '../../lib/ml-api';
-import { AGENT_STATUS_META, agentSource, agentStatusOf, getAgentResponses } from '../../lib/agent-responses';
+import {
+  AGENT_STATUS_META,
+  REVISION_LABEL,
+  agentSource,
+  agentStatusOf,
+  getAgentResponses,
+  type AgentResponseMap,
+} from '../../lib/agent-responses';
 import { formatDate, formatPrice, ML_STATUS_LABEL } from '../../lib/format';
 import type { QuestionDetailResponse } from '../../lib/types';
 
@@ -24,16 +31,20 @@ try {
 const q = detail?.question;
 const item = detail?.item;
 const pub = detail?.publication;
-const agentMap = q ? await getAgentResponses([q.id]) : new Map();
+const agentMap: AgentResponseMap = q ? await getAgentResponses([q.id]) : new Map();
 const agent = q ? agentMap.get(q.id) : undefined;
-const agentStatus = q ? agentStatusOf(agentMap, q.id) : 'sin_evaluar';
+const agentStatus = q ? agentStatusOf(agentMap, q) : 'sin_responder';
+
+// Resultado de aprobar/desaprobar (vuelve de /api/revision).
+const revisionOk = Astro.url.searchParams.get('revision');
+const revisionError = Astro.url.searchParams.get('revision_error');
 
 const image = item?.pictures?.[0]?.secure_url ?? item?.secure_thumbnail ?? pub?.thumbnail ?? null;
 const attributes = (item?.attributes ?? []).filter((a) => a.value_name);
 const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
 ---
 
-<Layout title={q ? `Pregunta ${q.id}` : 'Pregunta'}>
+<Layout title={q ? `Pregunta ${q.id}` : 'Pregunta'} connectionId={connectionParam}>
   <a href={backHref} class="back">← Volver a preguntas</a>
 
   {error && <div class="alert alert-error" role="alert"><strong>No se pudo cargar la pregunta.</strong> {error}</div>}
@@ -70,26 +81,48 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
             </div>
             <p class="muted hint">{AGENT_STATUS_META[agentStatus].hint}.</p>
 
+            {revisionOk && (
+              <div class="alert alert-info" role="status">
+                Respuesta {revisionOk === 'aprobado' ? 'aprobada' : 'desaprobada'}.
+              </div>
+            )}
+            {revisionError && (
+              <div class="alert alert-error" role="alert">
+                <strong>No se pudo guardar la decisión.</strong> {revisionError}
+              </div>
+            )}
+
             {agent ? (
               <>
                 <blockquote>{agent.respuesta}</blockquote>
-                {agentStatus === 'revision' && (
-                  <div class="hitl">
-                    <button class="btn btn-primary" type="button" disabled title="Disponible en la fase 2">
-                      Aprobar y publicar
+                {agent.status === 'pendiente' ? (
+                  <form class="hitl" method="post" action="/api/revision">
+                    <input type="hidden" name="id" value={agent.id} />
+                    <input type="hidden" name="question_id" value={q.id} />
+                    {connectionParam && <input type="hidden" name="connection" value={connectionParam} />}
+                    <button class="btn btn-primary" type="submit" name="status" value="aprobado" data-loading="Aprobando…">
+                      Aprobar
                     </button>
-                    <button class="btn" type="button" disabled title="Disponible en la fase 2">
-                      Editar respuesta
+                    <button class="btn" type="submit" name="status" value="desaprobado" data-loading="Desaprobando…">
+                      Desaprobar
                     </button>
-                    <span class="muted">La aprobación humana se habilita en la fase 2.</span>
-                  </div>
+                    <span class="muted">
+                      Por ahora solo registra la decisión: no se publica en Mercado Libre (sigue como nota privada).
+                    </span>
+                  </form>
+                ) : (
+                  <p class:list={['decision', agent.status]}>
+                    {REVISION_LABEL[agent.status][0].toUpperCase() + REVISION_LABEL[agent.status].slice(1)}
+                    {agent.aprobadoPor && ` por ${agent.aprobadoPor}`}
+                    {agent.aprobadoEn && ` · ${formatDate(agent.aprobadoEn)}`}
+                  </p>
                 )}
               </>
             ) : (
               <p class="muted">
                 {agentSource() === 'none'
-                  ? 'La API de repuestos aún no está conectada (fase 2).'
-                  : 'No hay registro del agente para esta pregunta.'}
+                  ? 'La API de repuestos no está conectada (falta REPUESTOS_API_URL).'
+                  : 'No hay respuesta del agente pendiente de revisión para esta pregunta.'}
               </p>
             )}
           </section>
@@ -178,8 +211,12 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
   .label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
 
   .agent { border-top: 4px solid var(--c, var(--sin)); }
-  .agent.revision { --c: var(--revision); }
-  .agent.sin_revision { --c: var(--sin-revision); }
+  .agent.pendiente { --c: var(--revision); }
+  .agent.respondida { --c: var(--sin-revision); }
+  .decision { font-size: 14px; font-weight: 600; margin: 0; }
+  .decision.aprobado { color: var(--si); }
+  .decision.desaprobado { color: var(--no); }
+  .alert { margin: 0 0 12px; }
   .agent-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   h2 { margin: 0; font-size: 17px; }
   .hint { margin: 4px 0 12px; font-size: 14px; }
@@ -200,7 +237,7 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
     width: 100%;
     aspect-ratio: 1;
     object-fit: contain;
-    background: #fff;
+    background-color: #fff;
     border-radius: 8px;
     margin: 12px 0;
   }

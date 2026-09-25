@@ -22,8 +22,8 @@ Ver `.env.example`. Todas se leen **en runtime**: se cargan en el contenedor, no
 | `ML_API_URL`          | URL de la API de ML (por defecto la de producción)                 |
 | `ML_API_TOKEN`        | `API_BEARER_TOKEN` de la API de ML (**obligatoria**)               |
 | `ML_CONNECTION_ID`    | Cuenta ML por defecto si hay varias (opcional)                     |
-| `REPUESTOS_API_URL`   | API de repuestos (fase 2). Vacío = estados "Sin evaluar"           |
-| `REPUESTOS_API_TOKEN` | Bearer de la API de repuestos (fase 2)                             |
+| `REPUESTOS_API_URL`   | API de repuestos (`https://api-repuestosroma.agentesai.es`). Vacío = sin datos del agente |
+| `REPUESTOS_API_TOKEN` | `API_KEY` de la API de repuestos (va en `x-api-key`)              |
 | `AGENT_MOCK`          | `true` = estados simulados, para previsualizar la UI               |
 | `DASHBOARD_USER` / `DASHBOARD_PASSWORD` | Basic Auth del panel. Vacías = panel sin protección |
 
@@ -50,26 +50,27 @@ Local:
 docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 ```
 
-## Contrato propuesto para la fase 2 (API de repuestos)
+## API de repuestos (respuestas del agente)
 
-`src/lib/agent-responses.ts` consulta:
+`src/lib/agent-responses.ts` consulta, siempre desde el servidor:
 
 ```
-GET {REPUESTOS_API_URL}/agent-responses?question_ids=123,456
-Authorization: Bearer {REPUESTOS_API_TOKEN}
-
-200 → {
-  "responses": [
-    {
-      "question_id": 123,
-      "revision": true,
-      "respuesta": "Mensaje de respuesta al cliente"
-    }
-  ]
-}
+GET   {REPUESTOS_API_URL}/v1/respuestas-agente?questionIds=123,456
+PATCH {REPUESTOS_API_URL}/v1/respuestas-agente/{id}   { "status": "aprobado" | "desaprobado", "aprobadoPor": "..." }
+x-api-key: {REPUESTOS_API_TOKEN}
 ```
 
-`revision` y `respuesta` son los dos campos de la tool del agente. `question_id` es un identificador que la API debe añadir a cada registro para relacionarlo con una pregunta. Este endpoint sigue siendo un contrato propuesto: si la API expone otra forma, hay que adaptar `fetchFromRepuestos` en ese archivo. Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas como "Sin evaluar".
+La tabla `respuesta_agente` solo tiene lo que el agente mandó **pidiendo revisión**, con `status` `pendiente` / `aprobado` / `desaprobado`. El panel muestra tres estados por pregunta:
+
+| Estado            | Criterio                                                         |
+| ----------------- | ---------------------------------------------------------------- |
+| Pendiente de revisión | fila con `status = pendiente`                                |
+| Respondida        | fila `aprobado`, o la pregunta está `ANSWERED` en ML             |
+| Sin responder     | el resto, incluidas las `desaprobado`                            |
+
+Mientras las respuestas del agente sean notas privadas en Chatwoot (fase de desarrollo), las que respondió **sin** pedir revisión no quedan en la tabla y ML las sigue viendo sin responder: el panel las muestra como "Sin responder".
+
+Aprobar / desaprobar (`POST /api/revision`, form del detalle de la pregunta) **solo registra la decisión** con el usuario del Basic Auth: no publica nada en Mercado Libre. Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas sin datos del agente.
 
 ## Estructura
 

@@ -88,15 +88,32 @@ export interface QuestionDetailResponse {
   publication: Publication | null;
 }
 
-// Respuestas del agente (API de repuestos — fase 2)
+// Respuestas del agente (API de repuestos: GET /v1/respuestas-agente)
 
-/** Estado que muestra la UI según si la respuesta necesita revisión humana. */
-export type AgentStatus = 'revision' | 'sin_revision' | 'sin_evaluar';
+/**
+ * Lo que muestra la UI por pregunta:
+ * - pendiente: el agente respondió pidiendo revisión y nadie la resolvió
+ * - respondida: aprobada en el panel, o respondida en Mercado Libre
+ * - sin_responder: el resto (incluye las desaprobadas: alguien tiene que contestarlas)
+ */
+export type AgentStatus = 'pendiente' | 'respondida' | 'sin_responder';
 
+/** Estado de la fila en la tabla `respuesta_agente`. */
+export type RevisionStatus = 'pendiente' | 'aprobado' | 'desaprobado';
+
+/**
+ * Una fila de `respuesta_agente`. Solo existen las que el agente mandó
+ * pidiendo revisión: lo que respondió sin revisión no se registra.
+ */
 export interface AgentResponse {
-  /** Identificador añadido por la API para asociar la salida del agente a la pregunta. */
-  question_id: number;
-  /** Campos de la tool del agente. */
-  revision: boolean;
+  id: string;
+  creadoEn: string;
+  /** Solo dígitos, como texto (los IDs de ML no entran en un int de 32 bits). */
+  questionId: string | null;
+  publicacionId: string | null;
+  cuenta: string | null;
   respuesta: string;
+  status: RevisionStatus;
+  aprobadoPor: string | null;
+  aprobadoEn: string | null;
 }
