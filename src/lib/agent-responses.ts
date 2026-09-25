@@ -2,7 +2,7 @@
  * Respuestas del agente (human in the loop), desde la API de repuestos.
  *
  *   GET   {REPUESTOS_API_URL}/v1/respuestas-agente?questionIds=1,2,3
- *   PATCH {REPUESTOS_API_URL}/v1/respuestas-agente/{id}   { status, aprobadoPor }
+ *   PATCH {REPUESTOS_API_URL}/v1/respuestas-agente/{id}   { revisadoPor, respuesta? }
  *
  * Autenticación con `x-api-key: REPUESTOS_API_TOKEN` (la API_KEY de esa API).
  * Se llama solo desde el servidor de Astro: la clave nunca llega al navegador.
@@ -24,14 +24,14 @@ export const AGENT_STATUSES: AgentStatus[] = ['pendiente', 'respondida', 'sin_re
 
 export const AGENT_STATUS_META: Record<AgentStatus, { label: string; hint: string }> = {
   pendiente: { label: 'Pendiente de revisión', hint: 'El agente propuso una respuesta y espera una decisión' },
-  respondida: { label: 'Respondida', hint: 'Respuesta aprobada, o ya respondida en Mercado Libre' },
-  sin_responder: { label: 'Sin responder', hint: 'Nadie la respondió todavía (o la respuesta del agente se desaprobó)' },
+  respondida: { label: 'Respondida', hint: 'Respuesta aprobada o editada, o ya respondida en Mercado Libre' },
+  sin_responder: { label: 'Sin responder', hint: 'Nadie la respondió todavía' },
 };
 
 export const REVISION_LABEL: Record<AgentResponse['status'], string> = {
   pendiente: 'pendiente de revisión',
   aprobado: 'aprobada',
-  desaprobado: 'desaprobada',
+  editado: 'editada',
 };
 
 export function isAgentStatus(value: string | null | undefined): value is AgentStatus {
@@ -39,13 +39,13 @@ export function isAgentStatus(value: string | null | undefined): value is AgentS
 }
 
 /**
- * Pendiente si la fila está pendiente; respondida si se aprobó o si ML ya la
+ * Pendiente si la fila está pendiente; respondida si se aprobó o editó, o si ML ya la
  * marca respondida (alguien contestó directo en ML); el resto, sin responder.
  */
 export function agentStatusOf(map: AgentResponseMap, question: Pick<Question, 'id' | 'status'>): AgentStatus {
   const response = map.get(question.id);
   if (response?.status === 'pendiente') return 'pendiente';
-  if (response?.status === 'aprobado' || question.status === 'ANSWERED') return 'respondida';
+  if (response?.status === 'aprobado' || response?.status === 'editado' || question.status === 'ANSWERED') return 'respondida';
   return 'sin_responder';
 }
 
@@ -124,14 +124,18 @@ export class RevisionError extends Error {
   }
 }
 
-/** Aprueba o desaprueba una respuesta pendiente. No publica nada en ML. */
-export async function resolveRevision(id: string, status: 'aprobado' | 'desaprobado', aprobadoPor: string) {
+/**
+ * Resuelve una respuesta pendiente. Sin `respuesta` (o con el mismo texto del
+ * agente) la API la deja `aprobado`; con otro texto, `editado`, y deja una nota
+ * privada en Chatwoot con la corrección. No publica nada en ML.
+ */
+export async function resolveRevision(id: string, revisadoPor: string, respuesta?: string) {
   if (!REPUESTOS_API_URL) throw new RevisionError('La API de repuestos no está configurada.', 500);
   const url = new URL(`/v1/respuestas-agente/${encodeURIComponent(id)}`, REPUESTOS_API_URL);
   const res = await fetch(url, {
     method: 'PATCH',
     headers: { ...headers(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status, aprobadoPor }),
+    body: JSON.stringify({ revisadoPor, ...(respuesta !== undefined ? { respuesta } : {}) }),
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
@@ -144,10 +148,10 @@ export async function resolveRevision(id: string, status: 'aprobado' | 'desaprob
 // --- Mock (solo para previsualizar) ---
 
 function mockResponses(questionIds: number[]): AgentResponseMap {
-  const muestras: (Pick<AgentResponse, 'status' | 'respuesta'> | null)[] = [
-    { status: 'pendiente', respuesta: 'Hola, estamos verificando la compatibilidad con tu modelo exacto y te respondemos a la brevedad.' },
-    { status: 'aprobado', respuesta: '¡Hola! Sí, es compatible con tu vehículo. Tenemos stock disponible para envío inmediato. ¡Saludos!' },
-    { status: 'desaprobado', respuesta: 'Hola, lamentablemente no es compatible con ese modelo. ¡Saludos!' },
+  const muestras: (Pick<AgentResponse, 'status' | 'respuestaPropuesta' | 'respuestaEnviada'> | null)[] = [
+    { status: 'pendiente', respuestaPropuesta: 'Hola, estamos verificando la compatibilidad con tu modelo exacto y te respondemos a la brevedad.', respuestaEnviada: null },
+    { status: 'aprobado', respuestaPropuesta: '¡Hola! Sí, es compatible con tu vehículo. ¡Saludos!', respuestaEnviada: '¡Hola! Sí, es compatible con tu vehículo. ¡Saludos!' },
+    { status: 'editado', respuestaPropuesta: 'Hola, no es compatible con ese modelo. ¡Saludos!', respuestaEnviada: 'Hola, para ese modelo va el código 01MI0043902. Indicanos el chasis y lo confirmamos. ¡Saludos!' },
     null,
   ];
   const map: AgentResponseMap = new Map();
@@ -160,8 +164,8 @@ function mockResponses(questionIds: number[]): AgentResponseMap {
       questionId: String(id),
       publicacionId: null,
       cuenta: null,
-      aprobadoPor: muestra.status === 'pendiente' ? null : 'mock',
-      aprobadoEn: muestra.status === 'pendiente' ? null : new Date().toISOString(),
+      revisadoPor: muestra.status === 'pendiente' ? null : 'mock',
+      revisadoEn: muestra.status === 'pendiente' ? null : new Date().toISOString(),
       ...muestra,
     });
   }

@@ -35,7 +35,7 @@ const agentMap: AgentResponseMap = q ? await getAgentResponses([q.id]) : new Map
 const agent = q ? agentMap.get(q.id) : undefined;
 const agentStatus = q ? agentStatusOf(agentMap, q) : 'sin_responder';
 
-// Resultado de aprobar/desaprobar (vuelve de /api/revision).
+// Resultado de aprobar/editar (vuelve de /api/revision).
 const revisionOk = Astro.url.searchParams.get('revision');
 const revisionError = Astro.url.searchParams.get('revision_error');
 
@@ -85,7 +85,9 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
 
             {revisionOk && (
               <div class="alert alert-info" role="status">
-                Respuesta {revisionOk === 'aprobado' ? 'aprobada' : 'desaprobada'}.
+                {revisionOk === 'editado'
+                  ? 'Respuesta editada. Quedó una nota privada en Chatwoot con el texto corregido.'
+                  : 'Respuesta aprobada.'}
               </div>
             )}
             {revisionError && (
@@ -96,25 +98,48 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
 
             {agent ? (
               <>
-                <blockquote>{agent.respuesta}</blockquote>
+                {agent.status === 'editado' ? (
+                  <>
+                    <span class="label">Enviada (editada)</span>
+                    <blockquote>{agent.respuestaEnviada}</blockquote>
+                    <details class="original">
+                      <summary>Ver la propuesta original del agente</summary>
+                      <blockquote class="tachada">{agent.respuestaPropuesta}</blockquote>
+                    </details>
+                  </>
+                ) : (
+                  <blockquote>{agent.respuestaEnviada ?? agent.respuestaPropuesta}</blockquote>
+                )}
                 {agent.status === 'pendiente' ? (
-                  <form class="hitl" method="post" action="/api/revision">
-                    <input type="hidden" name="id" value={agent.id} />
-                    <input type="hidden" name="question_id" value={q.id} />
-                    {connectionParam && <input type="hidden" name="connection" value={connectionParam} />}
-                    <button class="btn btn-primary" type="submit" name="status" value="aprobado" data-loading="Aprobando…">
-                      Aprobar
-                    </button>
-                    <button class="btn btn-outline" type="submit" name="status" value="desaprobado" data-loading="Desaprobando…">
-                      Desaprobar
-                    </button>
-                    <p class="muted decision-note">La decisión se registra internamente. No publica la respuesta en Mercado Libre.</p>
-                  </form>
+                  <div class="hitl">
+                    <form method="post" action="/api/revision">
+                      <input type="hidden" name="id" value={agent.id} />
+                      <input type="hidden" name="question_id" value={q.id} />
+                      {connectionParam && <input type="hidden" name="connection" value={connectionParam} />}
+                      <button class="btn btn-primary" type="submit" name="accion" value="aprobar" data-loading="Aprobando…">
+                        Aprobar tal cual
+                      </button>
+                    </form>
+                    <details class="editar">
+                      <summary class="btn btn-outline">Editar respuesta</summary>
+                      <form method="post" action="/api/revision">
+                        <input type="hidden" name="id" value={agent.id} />
+                        <input type="hidden" name="question_id" value={q.id} />
+                        {connectionParam && <input type="hidden" name="connection" value={connectionParam} />}
+                        <label class="label" for="respuesta-editada">Texto que se va a enviar</label>
+                        <textarea id="respuesta-editada" class="textarea" name="respuesta" rows="5" maxlength="2000" required>{agent.respuestaPropuesta}</textarea>
+                        <button class="btn btn-primary" type="submit" name="accion" value="editar" data-loading="Guardando…">
+                          Guardar edición
+                        </button>
+                      </form>
+                    </details>
+                    <p class="muted decision-note">La decisión se registra internamente y no publica nada en Mercado Libre. Si editás, queda una nota privada en Chatwoot con el texto corregido.</p>
+                  </div>
                 ) : (
                   <p class:list={['decision', agent.status]}>
                     {REVISION_LABEL[agent.status][0].toUpperCase() + REVISION_LABEL[agent.status].slice(1)}
-                    {agent.aprobadoPor && ` por ${agent.aprobadoPor}`}
-                    {agent.aprobadoEn && ` · ${formatDate(agent.aprobadoEn)}`}
+                    {agent.revisadoPor && ` por ${agent.revisadoPor}`}
+                    {agent.revisadoEn && ` · ${formatDate(agent.revisadoEn)}`}
                   </p>
                 )}
               </>
@@ -219,7 +244,7 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
   .agent.respondida { --c: var(--sin-revision); }
   .decision { font-size: 14px; font-weight: 600; margin: 0; }
   .decision.aprobado { color: var(--si); }
-  .decision.desaprobado { color: var(--no); }
+  .decision.editado { color: var(--si); }
   .alert { margin: 0 0 12px; }
   .agent-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   h2 { margin: 0; font-size: 19px; }
@@ -237,8 +262,20 @@ const backHref = connectionParam ? `/?connection=${connectionParam}` : '/';
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
   dt { color: var(--text-muted); }
   dd { margin: 0; overflow-wrap: anywhere; }
-  .hitl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 13px; }
-  .decision-note { flex-basis: 100%; margin: 2px 0 0; font-size: 12px; }
+  .hitl { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 13px; }
+  .hitl form { margin: 0; }
+  .editar { margin: 0; }
+  .editar summary { list-style: none; margin: 0; }
+  .editar summary::-webkit-details-marker { display: none; }
+  .editar[open] { flex-basis: 100%; order: 1; }
+  .editar[open] summary { display: none; }
+  .editar form { display: flex; flex-direction: column; gap: 8px; }
+  .editar textarea { width: 100%; font-size: 15px; line-height: 1.5; }
+  .editar .btn { align-self: flex-start; }
+  .original { margin-top: 10px; font-size: 13px; }
+  .tachada { font-size: 14px; color: var(--text-muted); border-left-color: var(--border); }
+  .decision { margin-top: 14px; }
+  .decision-note { flex-basis: 100%; order: 2; margin: 2px 0 0; font-size: 12px; }
   .hitl .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 
   .item img {

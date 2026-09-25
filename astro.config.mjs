@@ -14,7 +14,7 @@ export default defineConfig({
     // ignora Host y X-Forwarded-* salvo para estos dominios: sin esto la app
     // cree estar en http://localhost:4321, el Origin del navegador
     // (https://<dominio>) no coincide y checkOrigin rechaza con 403 los forms
-    // (aprobar / desaprobar). Verificado simulando los headers de Traefik.
+    // (aprobar / editar). Verificado simulando los headers de Traefik.
     allowedDomains: [{ hostname: '**.agentesai.es', protocol: 'https' }],
   },
   env: {

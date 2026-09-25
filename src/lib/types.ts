@@ -93,13 +93,13 @@ export interface QuestionDetailResponse {
 /**
  * Lo que muestra la UI por pregunta:
  * - pendiente: el agente respondió pidiendo revisión y nadie la resolvió
- * - respondida: aprobada en el panel, o respondida en Mercado Libre
- * - sin_responder: el resto (incluye las desaprobadas: alguien tiene que contestarlas)
+ * - respondida: aprobada o editada en el panel, o respondida en Mercado Libre
+ * - sin_responder: el resto
  */
 export type AgentStatus = 'pendiente' | 'respondida' | 'sin_responder';
 
 /** Estado de la fila en la tabla `respuesta_agente`. */
-export type RevisionStatus = 'pendiente' | 'aprobado' | 'desaprobado';
+export type RevisionStatus = 'pendiente' | 'aprobado' | 'editado';
 
 /**
  * Una fila de `respuesta_agente`. Solo existen las que el agente mandó
@@ -112,8 +112,11 @@ export interface AgentResponse {
   questionId: string | null;
   publicacionId: string | null;
   cuenta: string | null;
-  respuesta: string;
+  /** Lo que propuso el agente. */
+  respuestaPropuesta: string;
+  /** Lo que se envía al final: null si está pendiente; la propuesta si se aprobó, el texto corregido si se editó. */
+  respuestaEnviada: string | null;
   status: RevisionStatus;
-  aprobadoPor: string | null;
-  aprobadoEn: string | null;
+  revisadoPor: string | null;
+  revisadoEn: string | null;
 }

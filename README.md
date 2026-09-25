@@ -41,7 +41,7 @@ npm run dev            # http://localhost:4321
 
 1. En Dokploy crear un servicio **Docker Compose** apuntando a este repo (`docker-compose.yml`).
 2. En **Environment** cargar las variables de `.env.example`, al menos `ML_API_TOKEN`, `ML_CONNECTION_ID` (el **id numérico** de la cuenta default, ej. `8`), `REPUESTOS_API_URL`, `REPUESTOS_API_TOKEN`, `DASHBOARD_USER` y `DASHBOARD_PASSWORD`.
-3. En **Domains** asignar el dominio al servicio `web`, puerto `4321`, con HTTPS. **Tiene que ser un subdominio de `agentesai.es`**: es lo que `security.allowedDomains` de `astro.config.mjs` confía. Con otro dominio, Astro ignora los headers de Traefik y los forms (aprobar / desaprobar) dan 403 "Cross-site POST form submissions are forbidden"; agregarlo ahí.
+3. En **Domains** asignar el dominio al servicio `web`, puerto `4321`, con HTTPS. **Tiene que ser un subdominio de `agentesai.es`**: es lo que `security.allowedDomains` de `astro.config.mjs` confía. Con otro dominio, Astro ignora los headers de Traefik y los forms (aprobar / editar) dan 403 "Cross-site POST form submissions are forbidden"; agregarlo ahí.
 4. Deploy. Healthcheck: `GET /health`, que queda público aunque haya Basic Auth.
 
 El servicio va en `dokploy-network` (externa), igual que la API de repuestos: es la red por la que Traefik lo alcanza.
@@ -58,21 +58,21 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 
 ```
 GET   {REPUESTOS_API_URL}/v1/respuestas-agente?questionIds=123,456
-PATCH {REPUESTOS_API_URL}/v1/respuestas-agente/{id}   { "status": "aprobado" | "desaprobado", "aprobadoPor": "..." }
+PATCH {REPUESTOS_API_URL}/v1/respuestas-agente/{id}   { "revisadoPor": "...", "respuesta"?: "..." }
 x-api-key: {REPUESTOS_API_TOKEN}
 ```
 
-La tabla `respuesta_agente` solo tiene lo que el agente mandó **pidiendo revisión**, con `status` `pendiente` / `aprobado` / `desaprobado`. El panel muestra tres estados por pregunta:
+La tabla `respuesta_agente` solo tiene lo que el agente mandó **pidiendo revisión**, con `status` `pendiente` / `aprobado` / `editado`, la `respuestaPropuesta` del agente y la `respuestaEnviada` al final. El panel muestra tres estados por pregunta:
 
 | Estado            | Criterio                                                         |
 | ----------------- | ---------------------------------------------------------------- |
 | Pendiente de revisión | fila con `status = pendiente`                                |
-| Respondida        | fila `aprobado`, o la pregunta está `ANSWERED` en ML             |
-| Sin responder     | el resto, incluidas las `desaprobado`                            |
+| Respondida        | fila `aprobado` o `editado`, o la pregunta está `ANSWERED` en ML |
+| Sin responder     | el resto                                                         |
 
 Mientras las respuestas del agente sean notas privadas en Chatwoot (fase de desarrollo), las que respondió **sin** pedir revisión no quedan en la tabla y ML las sigue viendo sin responder: el panel las muestra como "Sin responder".
 
-Aprobar / desaprobar (`POST /api/revision`, form del detalle de la pregunta) **solo registra la decisión** con el usuario del Basic Auth: no publica nada en Mercado Libre. Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas sin datos del agente.
+Aprobar o editar (`POST /api/revision`, forms del detalle de la pregunta) registra la decisión con el usuario del Basic Auth y **no publica nada en Mercado Libre**. "Aprobar tal cual" no manda texto; "Editar respuesta" manda el texto del editor y **la API decide el estado**: si no cambió, `aprobado`; si cambió, `editado`, y la API deja una nota privada en Chatwoot con la corrección (necesita `CHATWOOT_BOT_TOKEN` en la API). Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas sin datos del agente.
 
 ## Estructura
 
