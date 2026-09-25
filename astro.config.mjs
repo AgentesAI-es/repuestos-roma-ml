@@ -6,8 +6,15 @@ export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
   session: false,
-  // Detrás de Traefik (Dokploy) el Origin llega con el dominio público.
-  security: { checkOrigin: true },
+  security: {
+    checkOrigin: true,
+    // Detrás de Traefik (Dokploy) el request llega por http interno. Astro 7
+    // ignora Host y X-Forwarded-* salvo para estos dominios: sin esto la app
+    // cree estar en http://localhost:4321, el Origin del navegador
+    // (https://<dominio>) no coincide y checkOrigin rechaza con 403 los forms
+    // (aprobar / desaprobar). Verificado simulando los headers de Traefik.
+    allowedDomains: [{ hostname: '**.agentesai.es', protocol: 'https' }],
+  },
   env: {
     schema: {
       // Todas 'secret': se leen en runtime (variables del contenedor), no se hornean en el build.

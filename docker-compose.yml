@@ -12,6 +12,10 @@ services:
     restart: unless-stopped
     expose:
       - "4321"
+    # Traefik de Dokploy solo alcanza servicios en dokploy-network (igual que la
+    # API de repuestos). Sin esto el dominio da 502/404 con el contenedor sano.
+    networks:
+      - dokploy-network
     environment:
       HOST: 0.0.0.0
       PORT: 4321
@@ -29,3 +33,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+networks:
+  dokploy-network:
+    external: true

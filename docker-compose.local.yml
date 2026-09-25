@@ -1,5 +1,10 @@
-# Override sólo para desarrollo local: publica el puerto en el host.
+# Override sólo para desarrollo local: publica el puerto en el host y crea la
+# red localmente (en Dokploy `dokploy-network` ya existe y es externa).
 services:
   web:
     ports:
       - "${APP_PORT:-4321}:4321"
+
+networks:
+  dokploy-network:
+    external: false

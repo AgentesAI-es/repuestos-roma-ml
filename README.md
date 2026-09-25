@@ -40,9 +40,11 @@ npm run dev            # http://localhost:4321
 ## Docker / Dokploy
 
 1. En Dokploy crear un servicio **Docker Compose** apuntando a este repo (`docker-compose.yml`).
-2. En **Environment** cargar las variables de `.env.example`, al menos `ML_API_TOKEN`, `DASHBOARD_USER` y `DASHBOARD_PASSWORD`.
-3. En **Domains** asignar el dominio al servicio `web`, puerto `4321`.
+2. En **Environment** cargar las variables de `.env.example`, al menos `ML_API_TOKEN`, `ML_CONNECTION_ID` (el **id numérico** de la cuenta default, ej. `8`), `REPUESTOS_API_URL`, `REPUESTOS_API_TOKEN`, `DASHBOARD_USER` y `DASHBOARD_PASSWORD`.
+3. En **Domains** asignar el dominio al servicio `web`, puerto `4321`, con HTTPS. **Tiene que ser un subdominio de `agentesai.es`**: es lo que `security.allowedDomains` de `astro.config.mjs` confía. Con otro dominio, Astro ignora los headers de Traefik y los forms (aprobar / desaprobar) dan 403 "Cross-site POST form submissions are forbidden"; agregarlo ahí.
 4. Deploy. Healthcheck: `GET /health`, que queda público aunque haya Basic Auth.
+
+El servicio va en `dokploy-network` (externa), igual que la API de repuestos: es la red por la que Traefik lo alcanza.
 
 Local:
 
