@@ -35,7 +35,12 @@ export default defineConfig({
       // Genera estados de agente simulados para previsualizar la UI mientras no exista la tabla
       AGENT_MOCK: envField.boolean({ context: 'server', access: 'secret', default: false }),
 
-      // Protección básica del panel (recomendado en producción)
+      // Acceso embebido en Chatwoot (sección custom del sidebar)
+      CHATWOOT_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
+      CHATWOOT_ACCOUNT_ID: envField.number({ context: 'server', access: 'secret', optional: true }),
+      SESSION_SECRET: envField.string({ context: 'server', access: 'secret', optional: true }),
+
+      // Protección básica del panel para acceso directo fuera de Chatwoot
       DASHBOARD_USER: envField.string({ context: 'server', access: 'secret', optional: true }),
       DASHBOARD_PASSWORD: envField.string({ context: 'server', access: 'secret', optional: true }),
     },

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { RevisionError, resolveRevision } from '../../lib/agent-responses';
+import { SESSION_COOKIE, readSession } from '../../lib/auth';
 
 /**
  * Aprobar o editar una respuesta del agente desde el detalle de la
@@ -14,7 +15,7 @@ import { RevisionError, resolveRevision } from '../../lib/agent-responses';
  * conservando `embed=1` si venía del modal. El "Aprobar" de la card de la
  * bandeja manda `volver` (la URL de la lista) y vuelve ahí.
  */
-export const POST: APIRoute = async ({ request, redirect }) => {
+export const POST: APIRoute = async ({ request, redirect, cookies }) => {
   const form = await request.formData();
   const id = String(form.get('id') ?? '');
   const respuesta = String(form.get('respuesta') ?? '').trim();
@@ -37,7 +38,8 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   if (!id) return volver({ revision_error: 'Pedido inválido.' });
 
   try {
-    const fila = await resolveRevision(id, usuarioDelPanel(request), respuesta || undefined);
+    const sesion = await readSession(cookies.get(SESSION_COOKIE)?.value);
+    const fila = await resolveRevision(id, sesion?.name || usuarioDelPanel(request), respuesta || undefined);
     return volver({ revision: fila.status });
   } catch (err) {
     console.error('[revision]', err);
@@ -51,7 +53,7 @@ function rutaLocal(valor: string): string | null {
   return /^\/(?![/\\])/.test(valor) ? valor : null;
 }
 
-/** El usuario del Basic Auth del panel; si el panel no tiene login, "panel". */
+/** Sin sesión de Chatwoot: el usuario del Basic Auth del panel; si el panel no tiene login, "panel". */
 function usuarioDelPanel(request: Request): string {
   const [scheme, encoded] = (request.headers.get('authorization') ?? '').split(' ');
   if (scheme !== 'Basic' || !encoded) return 'panel';
