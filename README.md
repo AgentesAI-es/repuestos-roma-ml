@@ -85,11 +85,13 @@ La tabla `respuesta_agente` solo tiene lo que el agente mandó **pidiendo revisi
 | Respondida        | fila `aprobado` o `editado`, o la pregunta está `ANSWERED` en ML |
 | Sin responder     | el resto                                                         |
 
+La pestaña **Aprobadas** muestra solo las respuestas del agente que una persona aprobó o editó (filas `aprobado` / `editado`), sacadas de la tabla como "Para revisar". **Respondidas** incluye además las que se contestaron directo en ML.
+
 Mientras las respuestas del agente sean notas privadas en Chatwoot (fase de desarrollo), las que respondió **sin** pedir revisión no quedan en la tabla y ML las sigue viendo sin responder: el panel las muestra como "Sin responder".
 
 En la bandeja, toda la card es el link al detalle: con un clic se abre en un modal sobre la lista (el mismo detalle con `?embed=1`, en un iframe; al cerrarlo, si se resolvió algo adentro, la lista se recarga). Ctrl+clic lo abre en otra pestaña. Las pendientes muestran la propuesta entera y un botón **Aprobar** que la aprueba tal cual y vuelve a la lista (`volver`, solo rutas del mismo sitio).
 
-El detalle de la pregunta es una conversación: las preguntas anteriores del comprador en esa publicación (API de ML con `item_id` + `buyer_id`), la actual y sus respuestas, en una card del alto de la pantalla donde solo scrollea el chat. Si la respuesta del agente está pendiente, abajo hay un cuadro de respuesta cargado con la propuesta. Aprobar o editar (`POST /api/revision`) registra la decisión con el nombre del agente de Chatwoot (o el usuario del Basic Auth si se entró directo) y **no publica nada en Mercado Libre**. Es un solo form que manda el texto del cuadro, y **la API decide el estado**: si no cambió, `aprobado`; si cambió, `editado`, y la API deja una nota privada en Chatwoot con la corrección (necesita `CHATWOOT_BOT_TOKEN` en la API). Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas sin datos del agente.
+El detalle de la pregunta es una conversación: las preguntas anteriores del comprador en esa publicación (API de ML con `item_id` + `buyer_id`), la actual y sus respuestas, en una card del alto de la pantalla donde solo scrollea el chat. Si la respuesta del agente está pendiente, abajo hay un cuadro de respuesta cargado con la propuesta. Aprobar o editar (`POST /api/revision`) registra la decisión con el nombre del agente de Chatwoot (o el usuario del Basic Auth si se entró directo) y **no publica nada en Mercado Libre**. Es un solo form que manda el texto del cuadro, y **la API decide el estado**: si no cambió, `aprobado`; si cambió, `editado`. En los dos casos la API deja una nota privada en Chatwoot con el texto final (necesita `CHATWOOT_BOT_TOKEN` en la API). Si la API de repuestos falla, el panel sigue funcionando y muestra las preguntas sin datos del agente.
 
 ## Estructura
 

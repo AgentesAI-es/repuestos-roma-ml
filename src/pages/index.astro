@@ -10,10 +10,10 @@ import {
   countPending,
   getAgentResponses,
   isAgentStatus,
-  listPending,
+  listByStatus,
 } from '../lib/agent-responses';
 import { dayToIso } from '../lib/format';
-import type { AgentStatus, Connection, QuestionListItem } from '../lib/types';
+import type { AgentResponse, AgentStatus, Connection, QuestionListItem } from '../lib/types';
 
 const PAGE_SIZE = 50;
 const params = Astro.url.searchParams;
@@ -25,22 +25,31 @@ const params = Astro.url.searchParams;
  *   pendiente      las filas `pendiente` de la API de repuestos, con el detalle
  *                  de cada pregunta desde ML (todas, no solo las de una página)
  *   sin_responder  UNANSWERED de ML, sin las que ya tienen revisión
+ *   aprobadas      las filas `aprobado` y `editado` de la API de repuestos: lo que
+ *                  respondió el agente con el visto bueno de una persona
  *   respondida     todas las de ML que estén respondidas en ML, aprobadas o editadas
  *   todas          todas las de ML
  *
  * "Sin responder" y "Respondidas" filtran sobre la página de ML: puede venir
  * alguna menos que 50, pero ninguna queda afuera de la paginación.
  */
-type Tab = AgentStatus | 'todas';
+type Tab = AgentStatus | 'aprobadas' | 'todas';
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: 'pendiente', label: 'Para revisar', hint: AGENT_STATUS_META.pendiente.hint },
   { id: 'sin_responder', label: 'Sin responder', hint: AGENT_STATUS_META.sin_responder.hint },
+  { id: 'aprobadas', label: 'Aprobadas', hint: 'Respuestas del agente aprobadas o editadas por una persona' },
   { id: 'respondida', label: 'Respondidas', hint: AGENT_STATUS_META.respondida.hint },
   { id: 'todas', label: 'Todas', hint: 'Todas las preguntas de la cuenta' },
 ];
+// Las que salen de la tabla de repuestos y no de una página de ML.
+const TAB_STATUSES: Partial<Record<Tab, AgentResponse['status'][]>> = {
+  pendiente: ['pendiente'],
+  aprobadas: ['aprobado', 'editado'],
+};
 // `agent` es el parámetro viejo: los links guardados siguen andando.
 const tabParam = params.get('tab') ?? params.get('agent');
-const tabElegida: Tab | null = tabParam === 'todas' || isAgentStatus(tabParam) ? (tabParam as Tab) : null;
+const tabElegida: Tab | null =
+  tabParam === 'todas' || tabParam === 'aprobadas' || isAgentStatus(tabParam) ? (tabParam as Tab) : null;
 
 const sort = params.get('sort') === 'asc' ? 'asc' : 'desc';
 const from = params.get('from') ?? '';
@@ -70,8 +79,9 @@ try {
     // Sin pestaña elegida, se abre donde hay trabajo: revisar si hay pendientes.
     if (!tabElegida && pendingCount) tab = 'pendiente';
 
-    if (tab === 'pendiente' && agentSource() === 'repuestos') {
-      ({ questions, total, failedDetails } = await loadPending(connectionId));
+    const tableStatuses = TAB_STATUSES[tab];
+    if (tableStatuses && agentSource() === 'repuestos') {
+      ({ questions, total, failedDetails } = await loadFromTable(connectionId, tableStatuses));
     } else {
       const data = await listQuestions({
         connection_id: connectionId,
@@ -96,15 +106,20 @@ try {
 }
 
 const agentMap = await getAgentResponses(questions.map((q) => q.id));
-const visible = tab === 'todas' ? questions : questions.filter((q) => agentStatusOf(agentMap, q) === tab);
+const visible =
+  tab === 'todas'
+    ? questions
+    : tab === 'aprobadas'
+      ? questions.filter((q) => ['aprobado', 'editado'].includes(agentMap.get(q.id)?.status ?? ''))
+      : questions.filter((q) => agentStatusOf(agentMap, q) === tab);
 hidden = questions.length - visible.length;
 const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 // Si todo entra en una página, el número que se ve es el real (sin las de otra pestaña).
 const shown = totalPages === 1 ? visible.length : total;
 
-/** Las pendientes de la cuenta, con fechas y orden aplicados acá (no pasan por el filtro de ML). */
-async function loadPending(connection: number) {
-  const rows = await listPending(connection);
+/** Las filas de la tabla de la cuenta, con fechas y orden aplicados acá (no pasan por el filtro de ML). */
+async function loadFromTable(connection: number, statuses: AgentResponse['status'][]) {
+  const rows = await listByStatus(connection, statuses);
   const details = await Promise.allSettled(rows.map((r) => getQuestion(r.questionId!, connection)));
   const desde = dayToIso(from);
   const hasta = dayToIso(to, true);
@@ -217,7 +232,7 @@ const returnTo = hrefWith({});
     loaded && (hidden > 0 || failedDetails > 0 || agentSource() === 'none') && (
       <p class="muted note">
         {hidden > 0 && `${hidden} de esta página de Mercado Libre están en otra pestaña. `}
-        {failedDetails > 0 && `${failedDetails} pendientes no se pudieron traer de Mercado Libre. `}
+        {failedDetails > 0 && `${failedDetails} preguntas de esta pestaña no se pudieron traer de Mercado Libre. `}
         {agentSource() === 'none' && 'La revisión del agente aparece al conectar la API de repuestos.'}
       </p>
     )
@@ -373,6 +388,7 @@ const returnTo = hrefWith({});
   .state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sin); }
   .pendiente .state-dot { background: var(--revision); }
   .respondida .state-dot { background: var(--si); }
+  .aprobadas .state-dot { background: var(--link); }
   .tab-count {
     min-width: 20px;
     padding: 1px 6px;

@@ -116,21 +116,29 @@ export async function countPending(connectionId: number): Promise<number | null>
 }
 
 /**
- * Las filas `pendiente` de una cuenta, de la más nueva a la más vieja y una
- * por pregunta. Es lo que arma la pestaña "Para revisar": salen de la tabla y
- * no de una página de ML, así se ven todas aunque ML las tenga en cualquier
- * estado. Hasta 200 (el tope de la API).
+ * Las filas de una cuenta con alguno de esos estados, una por pregunta. Es lo
+ * que arma las pestañas "Para revisar" (`pendiente`) y "Aprobadas" (`aprobado`
+ * y `editado`): salen de la tabla y no de una página de ML, así se ven todas
+ * aunque ML las tenga en cualquier estado. Hasta 200 por estado (el tope de la API).
  */
-export async function listPending(connectionId: number): Promise<AgentResponse[]> {
-  const url = new URL('/v1/respuestas-agente', REPUESTOS_API_URL);
-  url.searchParams.set('status', 'pendiente');
-  url.searchParams.set('meliConnectionId', String(connectionId));
-  url.searchParams.set('limite', '200');
-  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`API repuestos respondió ${res.status}`);
-  const { respuestas } = (await res.json()) as { respuestas?: AgentResponse[] };
+export async function listByStatus(
+  connectionId: number,
+  statuses: AgentResponse['status'][],
+): Promise<AgentResponse[]> {
+  const porEstado = await Promise.all(
+    statuses.map(async (status) => {
+      const url = new URL('/v1/respuestas-agente', REPUESTOS_API_URL);
+      url.searchParams.set('status', status);
+      url.searchParams.set('meliConnectionId', String(connectionId));
+      url.searchParams.set('limite', '200');
+      const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) throw new Error(`API repuestos respondió ${res.status}`);
+      const { respuestas } = (await res.json()) as { respuestas?: AgentResponse[] };
+      return respuestas ?? [];
+    }),
+  );
   const vistas = new Set<string>();
-  return (respuestas ?? []).filter((r) => r.questionId && !vistas.has(r.questionId) && vistas.add(r.questionId));
+  return porEstado.flat().filter((r) => r.questionId && !vistas.has(r.questionId) && vistas.add(r.questionId));
 }
 
 export class RevisionError extends Error {
@@ -144,8 +152,8 @@ export class RevisionError extends Error {
 
 /**
  * Resuelve una respuesta pendiente. Sin `respuesta` (o con el mismo texto del
- * agente) la API la deja `aprobado`; con otro texto, `editado`, y deja una nota
- * privada en Chatwoot con la corrección. No publica nada en ML.
+ * agente) la API la deja `aprobado`; con otro texto, `editado`. En los dos casos
+ * deja una nota privada en Chatwoot con el texto final. No publica nada en ML.
  */
 export async function resolveRevision(id: string, revisadoPor: string, respuesta?: string) {
   if (!REPUESTOS_API_URL) throw new RevisionError('La API de repuestos no está configurada.', 500);
