@@ -15,11 +15,21 @@ const image = item?.pictures?.[0]?.secure_url ?? item?.secure_thumbnail ?? pub?.
 const price = formatPrice(item?.price ?? pub?.price, item?.currency_id ?? pub?.currency_id);
 const attributes = (item?.attributes ?? []).filter((a) => a.value_name);
 const condition = item?.condition === 'new' ? 'Nuevo' : item?.condition === 'used' ? 'Usado' : item?.condition;
+// Estados de una publicación en ML.
+const ESTADOS: Record<string, string> = {
+  active: 'Activa',
+  paused: 'Pausada',
+  closed: 'Finalizada',
+  under_review: 'En revisión',
+  inactive: 'Inactiva',
+  payment_required: 'Pago pendiente',
+};
+const estado = item?.status ?? pub?.status ?? '';
 const facts: [string, string | number][] = [
   ['Stock', item?.available_quantity ?? ''],
   ['Vendidos', item?.sold_quantity ?? ''],
   ['Condición', condition ?? ''],
-  ['Estado', item?.status ?? pub?.status ?? ''],
+  ['Estado', ESTADOS[estado] ?? estado],
 ].filter(([, v]) => v !== '' && v != null) as [string, string | number][];
 ---
 
@@ -76,5 +86,10 @@ const facts: [string, string | number][] = [
   dd { margin: 0; overflow-wrap: anywhere; }
   details { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgb(var(--border-weak)); }
   summary { cursor: pointer; font-weight: 500; font-size: 13px; margin-bottom: 8px; }
-  .attrs { font-size: 12px; }
+  /* Nombre arriba y valor abajo: en dos columnas las descripciones largas
+     quedaban apretadas y cortadas. */
+  .attrs { display: block; font-size: 12px; }
+  .attrs dt { margin-top: 10px; }
+  .attrs dt:first-child { margin-top: 0; }
+  .attrs dd { margin-top: 2px; line-height: 1.45; white-space: pre-line; }
 </style>
