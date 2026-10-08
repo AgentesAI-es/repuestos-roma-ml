@@ -3,6 +3,15 @@ import { defineConfig, envField } from 'astro/config';
 import node from '@astrojs/node';
 import tailwindcss from '@tailwindcss/vite';
 
+// Dominios en los que se confía para Host y X-Forwarded-* (ver `security`),
+// separados por coma: `**.example.com,panel.otro.com`. Se lee AL COMPILAR: en
+// Docker llega como build arg (docker-compose.yml -> Dockerfile).
+const allowedDomains = (process.env.ALLOWED_DOMAINS ?? '')
+  .split(',')
+  .map((/** @type {string} */ d) => d.trim())
+  .filter(Boolean)
+  .map((/** @type {string} */ hostname) => ({ hostname, protocol: 'https' }));
+
 export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
@@ -15,17 +24,13 @@ export default defineConfig({
     // cree estar en http://localhost:4321, el Origin del navegador
     // (https://<dominio>) no coincide y checkOrigin rechaza con 403 los forms
     // (aprobar / editar). Verificado simulando los headers de Traefik.
-    allowedDomains: [{ hostname: '**.agentesai.es', protocol: 'https' }],
+    allowedDomains,
   },
   env: {
     schema: {
       // Todas 'secret': se leen en runtime (variables del contenedor), no se hornean en el build.
       // API de Mercado Libre (preguntas)
-      ML_API_URL: envField.string({
-        context: 'server',
-        access: 'secret',
-        default: 'https://ml-repuestosroma.agentesai.es',
-      }),
+      ML_API_URL: envField.string({ context: 'server', access: 'secret' }),
       ML_API_TOKEN: envField.string({ context: 'server', access: 'secret', optional: true }),
       ML_CONNECTION_ID: envField.string({ context: 'server', access: 'secret', optional: true }),
 

@@ -1,5 +1,5 @@
 {
-  "name": "repuestos-roma-ml",
+  "name": "hm-ml",
   "type": "module",
   "version": "0.1.0",
   "private": true,
@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@types/node": "^22.20.5",
     "typescript": "^6.0.3",
     "vitest": "^3.2.7"
   }

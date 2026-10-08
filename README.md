@@ -1,4 +1,4 @@
-# Repuestos Roma · Preguntas ML
+# HM-ML · Human in the loop para Mercado Libre
 
 Panel en Astro (SSR, Node) para ver las preguntas de clientes de Mercado Libre y el estado del agente que las responde.
 
@@ -16,7 +16,8 @@ Ver `.env.example`. Todas se leen **en runtime**: se cargan en el contenedor, no
 
 | Variable              | Descripción                                                        |
 | --------------------- | ------------------------------------------------------------------ |
-| `ML_API_URL`          | URL de la API de ML (por defecto la de producción)                 |
+| `ML_API_URL`          | URL de la API de ML del cliente (**obligatoria**)                  |
+| `ALLOWED_DOMAINS`     | Dominio del panel detrás de Traefik, o un comodín (`**.example.com`); varios separados por coma. **Se lee al compilar** (build arg): cambiarlo pide rebuild. Default del compose: `**.agentesai.es` |
 | `ML_API_TOKEN`        | `API_BEARER_TOKEN` de la API de ML (**obligatoria**)               |
 | `ML_CONNECTION_ID`    | Cuenta ML por defecto si hay varias (opcional)                     |
 | `POSTGRES_PASSWORD`   | Contraseña de la base del compose (**obligatoria**; solo letras y números: va dentro de `DATABASE_URL`) |
@@ -41,7 +42,7 @@ El panel se agrega como sección custom del sidebar de Chatwoot (Configuración 
 
 1. Si no hay sesión, el panel muestra una página intermedia que le pide las credenciales a Chatwoot por `postMessage` (`CRM_AUTH_REQUEST` → `AUTH_TOKEN`), aceptando sólo mensajes con origen `CHATWOOT_URL`.
 2. El servidor valida el `api_access_token` del agente contra `GET {CHATWOOT_URL}/api/v1/profile` y comprueba que pertenezca a `CHATWOOT_ACCOUNT_ID`. El token no se guarda.
-3. Se crea una cookie firmada (`rr_session`, 8 h, `SameSite=None; Partitioned`) y se recarga la página.
+3. Se crea una cookie firmada (`hmml_session`, 8 h, `SameSite=None; Partitioned`) y se recarga la página.
 
 Abierto fuera de Chatwoot, redirige a `/login` (Basic Auth) si está configurado. El panel sólo se puede embeber desde `CHATWOOT_URL` (`frame-ancestors`).
 
@@ -65,7 +66,7 @@ TEST_DATABASE_URL=postgres://postgres:test@127.0.0.1:55432/postgres npm test
 
 1. En Dokploy crear un servicio **Docker Compose** apuntando a este repo (`docker-compose.yml`).
 2. En **Environment** cargar las variables de `.env.example`, al menos `ML_API_TOKEN`, `ML_CONNECTION_ID` (el **id numérico** de la cuenta default, ej. `8`), `POSTGRES_PASSWORD`, `TOOL_API_KEY`, `CHATWOOT_URL`, `CHATWOOT_BOT_TOKEN`, `DASHBOARD_USER` y `DASHBOARD_PASSWORD`.
-3. En **Domains** asignar el dominio al servicio `web`, puerto `4321`, con HTTPS. **Tiene que ser un subdominio de `agentesai.es`**: es lo que `security.allowedDomains` de `astro.config.mjs` confía. Con otro dominio, Astro ignora los headers de Traefik y los forms (aprobar / editar) dan 403 "Cross-site POST form submissions are forbidden"; agregarlo ahí.
+3. En **Domains** asignar el dominio al servicio `web`, puerto `4321`, con HTTPS. **El dominio tiene que estar cubierto por `ALLOWED_DOMAINS`** (default `**.agentesai.es`). Si no, Astro ignora los headers de Traefik y los forms (aprobar / editar) dan 403 "Cross-site POST form submissions are forbidden".
 4. Deploy. Healthcheck: `GET /health`, que queda público aunque haya Basic Auth. Con base, también la prueba (503 si no responde): así las migraciones se aplican al arrancar.
 
 `web` va en `dokploy-network` (externa), que es la red por la que Traefik lo alcanza, y en `default` con `db`. La base no se publica: solo `web` la ve. Sus datos viven en el volumen `db-data`.

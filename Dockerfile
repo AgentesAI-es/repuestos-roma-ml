@@ -6,6 +6,8 @@ RUN npm ci
 
 # ---- build ----
 FROM deps AS build
+# Dominios de confianza detrás del proxy (astro.config.mjs): se hornean al compilar.
+ARG ALLOWED_DOMAINS
 COPY . .
 RUN npm run build
 

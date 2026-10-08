@@ -12,6 +12,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # El dominio del panel (o un comodín que lo cubra). Sin él, detrás de
+        # Traefik los forms de aprobar/editar dan 403. Cambiarlo pide rebuild.
+        ALLOWED_DOMAINS: ${ALLOWED_DOMAINS:-**.agentesai.es}
     restart: unless-stopped
     expose:
       - "4321"
@@ -26,7 +30,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 4321
-      ML_API_URL: ${ML_API_URL:-https://ml-repuestosroma.agentesai.es}
+      ML_API_URL: ${ML_API_URL:?Definí ML_API_URL}
       ML_API_TOKEN: ${ML_API_TOKEN:?Definí ML_API_TOKEN}
       ML_CONNECTION_ID: ${ML_CONNECTION_ID:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-hmml}:${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-hmml}

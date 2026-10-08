@@ -6,10 +6,10 @@ import {
   DASHBOARD_PASSWORD,
 } from 'astro:env/server';
 
-export const SESSION_COOKIE = 'rr_session';
+export const SESSION_COOKIE = 'hmml_session';
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
 
-/** Origen de Chatwoot (ej. https://chat-repuestosroma.agentesai.es). Vacío = login por Chatwoot desactivado. */
+/** Origen de Chatwoot (ej. https://chat.example.com). Vacío = login por Chatwoot desactivado. */
 export const chatwootOrigin = CHATWOOT_URL && CHATWOOT_ACCOUNT_ID ? new URL(CHATWOOT_URL).origin : '';
 export const basicAuthEnabled = Boolean(DASHBOARD_USER && DASHBOARD_PASSWORD);
 
@@ -103,7 +103,7 @@ export function checkBasicAuth(header: string | null): boolean {
 export const basicAuthChallenge = () =>
   new Response('Autenticación requerida', {
     status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Repuestos Roma - Preguntas ML", charset="UTF-8"' },
+    headers: { 'WWW-Authenticate': 'Basic realm="HM-ML", charset="UTF-8"' },
   });
 
 /**
@@ -119,7 +119,7 @@ export function embedAuthPage(): Response {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<title>Preguntas ML · Repuestos Roma</title>
+<title>HM-ML · Preguntas de Mercado Libre</title>
 <style>
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 15px system-ui, sans-serif; color: #475569; background: #f8fafc; }
 </style>
@@ -128,7 +128,7 @@ export function embedAuthPage(): Response {
 <p id="msg">Validando sesión de Chatwoot…</p>
 <script>
   const { origin, basic } = ${config};
-  const RETRY_KEY = 'rr_auth_retry';
+  const RETRY_KEY = 'hmml_auth_retry';
   const msg = document.getElementById('msg');
   const fail = (text) => { msg.textContent = text; };
 

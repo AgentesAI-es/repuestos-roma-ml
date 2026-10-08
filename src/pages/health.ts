@@ -8,13 +8,13 @@ import { db, dbConfigurada } from '../lib/server/db';
  */
 export const GET: APIRoute = async () => {
   const headers = { 'Cache-Control': 'no-store' };
-  if (!dbConfigurada()) return Response.json({ ok: true, service: 'repuestos-roma-ml-ui', db: 'sin configurar' }, { headers });
+  if (!dbConfigurada()) return Response.json({ ok: true, service: 'hm-ml', db: 'sin configurar' }, { headers });
   try {
     const sql = await db();
     await sql`SELECT 1`;
-    return Response.json({ ok: true, service: 'repuestos-roma-ml-ui', db: 'ok' }, { headers });
+    return Response.json({ ok: true, service: 'hm-ml', db: 'ok' }, { headers });
   } catch (err) {
     console.error('[health] base', err);
-    return Response.json({ ok: false, service: 'repuestos-roma-ml-ui', db: 'error' }, { status: 503, headers });
+    return Response.json({ ok: false, service: 'hm-ml', db: 'error' }, { status: 503, headers });
   }
 };

@@ -1,6 +1,5 @@
 ---
 import '../styles/global.css';
-import { agentSource } from '../lib/agent-responses';
 import { connectionName, resolveConnectionId } from '../lib/accounts';
 import { getConnections } from '../lib/ml-api';
 import type { Connection } from '../lib/types';
@@ -13,14 +12,13 @@ interface Props {
   accounts?: boolean;
   /** Menos aire alrededor del contenido: el detalle ocupa el alto de la pantalla. */
   fill?: boolean;
-  /** Sin barra ni cuentas ni márgenes: el detalle dentro del modal de la bandeja. */
+  /** Sin cuentas ni márgenes: el detalle dentro del modal de la bandeja. */
   bare?: boolean;
   /** La página ocupa justo la pantalla y no scrollea: el contenido maneja su propio scroll (la bandeja). */
   fit?: boolean;
 }
 
 const { title, connectionId, accounts = true, fill = false, bare = false, fit = false } = Astro.props;
-const source = agentSource();
 
 // Las cuentas se cachean un minuto en ml-api. Si la API de ML falla,
 // la página muestra su propio error.
@@ -46,24 +44,11 @@ function iniciales(nombre: string) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>{title ? `${title} · Preguntas ML` : 'Preguntas ML · Repuestos Roma'}</title>
+    <title>{title ? `${title} · HM-ML` : 'HM-ML · Preguntas de Mercado Libre'}</title>
   </head>
   <body class:list={{ fit }}>
     <div id="nav-progress" class="nav-progress" hidden></div>
     <p id="nav-status" class="sr-only" aria-live="polite"></p>
-    {!bare && <header class="topbar">
-      <div class="container topbar-inner">
-        <a href="/" class="brand">
-          <span class="logo" aria-hidden="true">R</span>
-          <span class="brand-text"><strong>Repuestos Roma</strong><small>Centro de preguntas</small></span>
-        </a>
-        <span class="source" title="Origen de los estados del agente">
-          Agente:{' '}
-          {source === 'db' && 'base local'}
-          {source === 'none' && 'sin conectar'}
-        </span>
-      </div>
-    </header>}
     {
       accounts && !bare && cuentas.length > 0 && (
         <nav class="accounts" aria-label="Cuentas de Mercado Libre">
@@ -225,50 +210,13 @@ function iniciales(nombre: string) {
 </html>
 
 <style>
-  .topbar {
-    background: var(--brand);
-    color: var(--brand-contrast);
-    border-bottom: 1px solid rgb(255 255 255 / 0.1);
-  }
-  .topbar-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 68px;
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: inherit;
-    font-size: 16px;
-    text-decoration: none !important;
-  }
-  .logo {
-    display: grid;
-    place-items: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 11px;
-    background: var(--accent);
-    color: var(--brand);
-    font-weight: 800;
-  }
-  .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-  .brand-text small { font-size: 12px; font-weight: 400; opacity: 0.78; margin-top: 3px; }
-  .source {
-    font-size: 13px;
-    opacity: 0.85;
-    white-space: nowrap;
-  }
   main { padding-block: 30px 56px; }
   main.fill { padding-block: 14px 16px; }
 
-  /* Modo "cabe en la pantalla": barra y cuentas arriba, y main toma el resto
+  /* Modo "cabe en la pantalla": cuentas arriba, y main toma el resto
      como columna flex; lo que scrollea es un hijo de main (min-height: 0). */
   body.fit { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-  body.fit > .topbar, body.fit > .accounts { flex: none; }
+  body.fit > .accounts { flex: none; }
   body.fit > main { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; padding-block: 18px 16px; }
   /* En una pantalla muy baja no entra: vuelve el scroll normal de la página. */
   @media (max-height: 540px) {
@@ -384,7 +332,6 @@ function iniciales(nombre: string) {
   }
 
   @media (max-width: 560px) {
-    .source { display: none; }
     .account { flex-direction: column; align-items: stretch; }
     .metrics { gap: 7px; }
     .metric { min-width: 48px; }
