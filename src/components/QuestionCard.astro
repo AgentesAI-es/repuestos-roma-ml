@@ -20,7 +20,7 @@ const answered = q.status === 'ANSWERED';
 const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
 ---
 
-<article class="card q">
+<article class="q">
   <div class="thumb">
     {pub?.thumbnail ? <img src={pub.thumbnail} alt="" loading="lazy" /> : <span aria-hidden="true">📦</span>}
   </div>
@@ -78,82 +78,93 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
 </article>
 
 <style>
+  /* Fila de la lista de conversaciones de Chatwoot: sin card propia, separada
+     por una línea, con fondo al pasar el mouse. */
   .q {
     position: relative;
     display: grid;
-    grid-template-columns: 72px minmax(0, 1fr) auto;
-    gap: 18px;
-    padding: 17px 20px;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    gap: 14px;
+    padding: 14px 12px;
+    border-radius: 8px;
     align-items: center;
-    transition: border-color .15s ease, box-shadow .15s ease;
+    transition: background-color 0.1s ease-out;
   }
-  .q:hover .text { color: var(--link); }
-  .q:hover { border-color: #c7d3df; box-shadow: 0 10px 28px rgb(18 39 60 / .07); }
+  .q + :global(.q)::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 12px;
+    right: 12px;
+    border-top: 1px solid rgb(var(--border-weak));
+  }
+  .q:hover { background: rgb(var(--alpha-1)); }
+  .q:hover::before, .q:hover + :global(.q)::before { border-color: transparent; }
   .thumb {
-    width: 72px;
-    height: 72px;
-    border-radius: 10px;
-    background: var(--surface-2);
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    outline: 1px solid rgb(var(--border-container));
+    outline-offset: -1px;
+    background: #fff;
     display: grid;
     place-items: center;
     overflow: hidden;
-    font-size: 24px;
+    font-size: 20px;
+    align-self: start;
   }
-  .thumb img { width: 100%; height: 100%; object-fit: contain; background-color: #fff; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; }
   .body { min-width: 0; }
-  .meta { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 12px; align-items: center; }
-  .ml-status {
-    font-weight: 600;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--revision);
-  }
+  .meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; align-items: center; color: var(--text-muted); }
+  .meta .muted { color: var(--text-faint); }
+  .ml-status { font-weight: 500; color: var(--revision); }
   .ml-status.answered { color: var(--si); }
   .text {
     display: block;
-    margin: 5px 0;
+    margin: 2px 0;
     color: var(--text);
-    font-size: 16px;
-    font-weight: 680;
-    line-height: 1.4;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.45;
     overflow-wrap: anywhere;
     text-decoration: none !important;
   }
   .text::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
   .text:focus-visible { outline: none; }
-  .q:has(.text:focus-visible) { outline: 2px solid var(--link); outline-offset: 2px; }
-  /* Lo que tiene acción propia queda por encima del link de la card. */
+  .q:has(.text:focus-visible) { outline: 2px solid var(--brand); outline-offset: -2px; }
+  /* Lo que tiene acción propia queda por encima del link de la fila. */
   .pub a, .approve { position: relative; z-index: 1; }
-  .pub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pub { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pub a { color: inherit; }
+  .pub a:hover { color: var(--link); }
   .reply {
-    margin: 10px 0 0;
-    padding: 8px 11px;
-    border-left: 2px solid var(--si);
-    background: var(--surface-2);
-    border-radius: 0 7px 7px 0;
-    font-size: 12px;
-    line-height: 1.4;
-    max-height: 52px;
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-muted);
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow-wrap: anywhere;
   }
-  .reply.proposed { border-left-color: var(--revision); }
+  /* Lo del agente es una nota privada en Chatwoot: se ve como tal. */
+  .reply.proposed {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgb(var(--solid-amber));
+    color: rgb(var(--amber-12));
+  }
   /* La propuesta pendiente entera: se puede aprobar desde acá, que se lea todo. */
-  .reply.full { max-height: none; display: block; font-size: 13px; }
-  .reply.proposed.aprobado { border-left-color: var(--si); }
-  .reply.proposed.editado { border-left-color: var(--si); }
-  .reply-label { font-weight: 750; color: var(--text-muted); margin-right: 8px; }
-  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; min-width: 150px; }
+  .reply.full { display: block; outline: 1px dashed rgb(var(--amber-12) / 0.5); outline-offset: -1px; }
+  .reply-label { font-weight: 600; margin-right: 6px; color: inherit; }
+  .reply:not(.proposed) .reply-label { color: var(--text); }
+  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; min-width: 150px; }
   .approve { margin: 0; }
 
   @media (max-width: 640px) {
-    .q { grid-template-columns: 54px 1fr; gap: 10px 12px; padding: 14px; }
-    .thumb { width: 54px; height: 54px; align-self: start; }
+    .q { grid-template-columns: 40px 1fr; gap: 10px 12px; padding: 12px 8px; }
+    .thumb { width: 40px; height: 40px; }
     .side { grid-column: 2; flex-direction: row; justify-content: space-between; align-items: center; min-width: 0; width: 100%; }
     .reply { display: none; }
     .reply.full { display: block; }

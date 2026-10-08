@@ -63,14 +63,18 @@ const facts: [string, string | number][] = [
     object-fit: contain;
     background-color: #fff;
     border-radius: 8px;
+    outline: 1px solid rgb(var(--border-container));
+    outline-offset: -1px;
     margin-bottom: 12px;
   }
-  h3 { font-size: 15px; margin: 0 0 4px; line-height: 1.4; overflow-wrap: anywhere; }
-  .price { font-size: 20px; font-weight: 700; margin: 0 0 10px; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 5px 12px; margin: 0; font-size: 13px; }
+  h3 { font-size: 14px; font-weight: 500; margin: 0 0 4px; line-height: 1.45; overflow-wrap: anywhere; }
+  h3 a { color: var(--text); }
+  h3 a:hover { color: var(--link); }
+  .price { font-size: 18px; font-weight: 600; margin: 0 0 12px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
   dt { color: var(--text-muted); }
   dd { margin: 0; overflow-wrap: anywhere; }
-  details { margin-top: 12px; }
-  summary { cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+  details { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgb(var(--border-weak)); }
+  summary { cursor: pointer; font-weight: 500; font-size: 13px; margin-bottom: 8px; }
   .attrs { font-size: 12px; }
 </style>

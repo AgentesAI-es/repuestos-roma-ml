@@ -245,45 +245,49 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
   .shell {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 16px;
-    /* Topbar (68) + aire de main (30). */
-    height: calc(100dvh - 98px);
+    gap: 12px;
+    /* Aire de main (12 + 16). */
+    height: calc(100dvh - 28px);
     min-height: 460px;
   }
 
   .shell.embed { height: 100dvh; min-height: 0; padding: 12px; gap: 12px; }
-  .close { border: 0; background: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 0 4px; }
-  .close:hover { color: var(--text); }
-  .open-full { flex: none; font-size: 16px; color: var(--text-muted); text-decoration: none !important; }
-  .open-full:hover { color: var(--link); }
+  .close { border: 0; background: none; cursor: pointer; color: var(--text-muted); font-size: 16px; padding: 4px; border-radius: 6px; }
+  .close:hover { color: var(--text); background: rgb(var(--alpha-2)); }
+  .open-full { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; font-size: 15px; color: var(--text-muted); text-decoration: none !important; }
+  .open-full:hover { color: var(--text); background: rgb(var(--alpha-2)); }
   .chat { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 0; }
+
+  /* Encabezado de conversación de Chatwoot: alto fijo, nombre en 14/500. */
   .chat-head {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 18px;
-    border-bottom: 1px solid var(--border);
+    gap: 10px;
+    min-height: 56px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgb(var(--border-weak));
   }
-  .back { flex: none; font-size: 14px; font-weight: 600; }
-  h1 { flex: 1; min-width: 0; margin: 0; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .head-meta { font-weight: 500; font-size: 14px; }
+  .back { flex: none; font-size: 14px; font-weight: 500; color: var(--text-muted); }
+  .back:hover { color: var(--text); text-decoration: none; }
+  h1 { flex: 1; min-width: 0; margin: 0; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .head-meta { font-weight: 400; font-size: 13px; color: var(--text-faint); }
 
-  .pub-strip { display: none; border-bottom: 1px solid var(--border); }
+  .pub-strip { display: none; border-bottom: 1px solid rgb(var(--border-weak)); }
   .pub-strip summary {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 18px;
+    padding: 8px 16px;
     cursor: pointer;
     list-style: none;
     font-size: 13px;
   }
   .pub-strip summary::-webkit-details-marker { display: none; }
-  .pub-strip summary img { width: 34px; height: 34px; object-fit: contain; background: #fff; border-radius: 6px; flex: none; }
-  .strip-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  .pub-strip summary img { width: 32px; height: 32px; object-fit: contain; background: #fff; border-radius: 6px; flex: none; }
+  .strip-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
   .strip-more { flex: none; font-size: 12px; }
   .pub-strip[open] .strip-more { visibility: hidden; }
-  .pub-strip > :global(.pub) { padding: 4px 18px 14px; max-height: 45dvh; overflow-y: auto; }
+  .pub-strip > :global(.pub) { padding: 4px 16px 14px; max-height: 45dvh; overflow-y: auto; }
   .pub-strip :global(.pub img) { max-width: 200px; }
 
   .messages {
@@ -292,47 +296,64 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 16px 18px;
+    gap: 6px;
+    padding: 16px;
     background: var(--bg);
     overscroll-behavior: contain;
   }
   /* Con pocos mensajes, la conversación va pegada abajo (como un chat y como el esqueleto del modal). */
   .messages > :first-child { margin-top: auto; }
-  .day, .system { align-self: center; margin: 6px 0; font-size: 12px; color: var(--text-muted); text-align: center; }
-  .day { padding: 2px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
-  .system.ok { color: var(--si); font-weight: 600; }
+  .day, .system { align-self: center; margin: 8px 0; font-size: 12px; color: var(--text-muted); text-align: center; }
+  .day { padding: 2px 10px; border-radius: 999px; background: rgb(var(--alpha-1)); }
+  .system.ok { color: var(--si); font-weight: 500; }
 
+  /* Burbujas de Chatwoot (components-next/message): comprador en gris,
+     vendedor en azul, lo del agente como nota privada (ámbar). Sin borde; la
+     esquina del lado de quien habla, casi recta. */
   .msg {
     max-width: min(78%, 620px);
-    padding: 8px 12px 6px;
+    padding: 8px 12px;
     border-radius: 12px;
-    font-size: 15px;
-    line-height: 1.45;
+    font-size: 14px;
+    line-height: 1.5;
     overflow-wrap: anywhere;
-    border: 1px solid var(--border);
+    color: var(--text);
   }
   .msg p { margin: 0; white-space: pre-wrap; }
-  .who { display: block; margin-bottom: 2px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
-  .time { display: block; margin-top: 3px; font-size: 11px; color: var(--text-muted); text-align: right; }
-  .buyer-msg { align-self: flex-start; background: var(--surface); border-bottom-left-radius: 4px; }
-  .buyer-msg.current { border-color: var(--link); box-shadow: 0 0 0 1px var(--link); }
+  .who { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .time { display: block; margin-top: 4px; font-size: 11px; color: var(--text-faint); text-align: right; }
+  .buyer-msg { align-self: flex-start; background: rgb(var(--slate-4)); border-top-left-radius: 4px; }
+  .buyer-msg.current { outline: 2px solid var(--brand); outline-offset: 0; }
   .buyer-msg.current .who { color: var(--link); }
-  .seller-msg { align-self: flex-end; background: var(--sin-revision-bg); border-bottom-right-radius: 4px; }
-  .agent.pendiente { background: var(--revision-bg); border-color: var(--revision); border-style: dashed; }
-  .agent.pendiente .who { color: var(--revision); }
-  .agent.resuelta .who { color: var(--si); }
-  .original { margin-top: 6px; font-size: 13px; color: var(--text-muted); }
+  .seller-msg { align-self: flex-end; background: rgb(var(--solid-blue)); border-top-right-radius: 4px; }
+  .agent { background: rgb(var(--solid-amber)); color: rgb(var(--amber-12)); }
+  .agent .who, .agent .time { color: rgb(var(--amber-12) / 0.75); }
+  /* La pendiente todavía no salió: borde punteado, como un borrador. */
+  .agent.pendiente { outline: 1px dashed rgb(var(--amber-12) / 0.6); outline-offset: -1px; }
+  .original { margin-top: 6px; font-size: 13px; opacity: 0.8; }
   .original summary { cursor: pointer; font-size: 12px; }
   .original p { margin-top: 4px; text-decoration: line-through; }
 
-  .composer { display: flex; flex-direction: column; gap: 8px; padding: 12px 18px 14px; border-top: 1px solid var(--border); background: var(--surface); }
-  .composer textarea { width: 100%; min-height: 64px; font-size: 15px; line-height: 1.45; resize: none; background: var(--surface); }
+  /* Caja de respuesta de Chatwoot: el textarea sin contorno propio dentro de
+     un bloque con línea arriba; acciones abajo a la derecha. */
+  .composer { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-top: 1px solid rgb(var(--border-weak)); background: var(--surface); }
+  .composer textarea {
+    width: 100%;
+    min-height: 64px;
+    padding: 4px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: none;
+    outline: 0;
+    background: transparent;
+  }
+  .composer textarea:focus { outline: 0; }
+  .composer:focus-within { box-shadow: inset 0 2px 0 var(--brand); }
   .composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .composer-hint { font-size: 12px; }
+  .composer-hint { font-size: 12px; color: var(--text-faint); }
   .composer-error { margin: 0; font-size: 13px; color: var(--no); }
 
-  .side { overflow-y: auto; padding: 18px; }
+  .side { overflow-y: auto; padding: 16px; }
 
   @media (max-width: 900px) {
     .shell { grid-template-columns: 1fr; }
@@ -342,10 +363,10 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
   @media (max-width: 640px) {
     .shell.embed { padding: 0; }
     .shell.embed .chat { border-radius: 0; border: 0; }
-    .chat-head { padding: 10px 12px; gap: 8px; }
+    .chat-head { padding: 8px 12px; gap: 8px; }
     .back-label, .head-meta { display: none; }
     .messages { padding: 12px; }
-    .msg { max-width: 88%; font-size: 14px; }
+    .msg { max-width: 88%; }
     .composer { padding: 10px 12px 12px; }
     .composer-foot { flex-direction: column; align-items: stretch; }
     .composer-foot .btn { width: 100%; }

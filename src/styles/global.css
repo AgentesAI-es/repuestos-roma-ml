@@ -1,32 +1,24 @@
 @import "tailwindcss";
 @plugin "daisyui" { themes: false; }
+/* Los temas de daisyUI solo cubren lo que todavía usa sus clases (btn, input,
+   select, textarea); el aspecto real lo dan los tokens de abajo. */
 @plugin "daisyui/theme" {
   name: "hmml";
   default: true;
   color-scheme: light;
   --color-base-100: #ffffff;
-  --color-base-200: #f4f6f8;
-  --color-base-300: #e4e9ee;
-  --color-base-content: #172435;
-  --color-primary: #183d65;
+  --color-base-200: #f7f7f7;
+  --color-base-300: #e8e8ec;
+  --color-base-content: #1c2024;
+  --color-primary: #2781f6;
   --color-primary-content: #ffffff;
-  --color-secondary: #ffe36a;
-  --color-secondary-content: #172435;
-  --color-accent: #f1b83d;
-  --color-accent-content: #172435;
-  --color-neutral: #34465b;
+  --color-neutral: #60646c;
   --color-neutral-content: #ffffff;
-  --color-info: #306b9f;
-  --color-info-content: #ffffff;
-  --color-success: #18734a;
-  --color-success-content: #ffffff;
-  --color-warning: #a4610a;
-  --color-warning-content: #ffffff;
-  --color-error: #b74237;
+  --color-error: #ca244d;
   --color-error-content: #ffffff;
-  --radius-selector: 0.65rem;
-  --radius-field: 0.65rem;
-  --radius-box: 0.9rem;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -37,29 +29,19 @@
   name: "hmml-dark";
   prefersdark: true;
   color-scheme: dark;
-  --color-base-100: #17212d;
-  --color-base-200: #101923;
-  --color-base-300: #2b3948;
-  --color-base-content: #e9eef4;
-  --color-primary: #84b9ef;
-  --color-primary-content: #0e2033;
-  --color-secondary: #ffe36a;
-  --color-secondary-content: #172435;
-  --color-accent: #f1b83d;
-  --color-accent-content: #172435;
-  --color-neutral: #31465b;
-  --color-neutral-content: #ffffff;
-  --color-info: #6aa9df;
-  --color-info-content: #0e2033;
-  --color-success: #64cc9a;
-  --color-success-content: #10261c;
-  --color-warning: #ffc66b;
-  --color-warning-content: #332008;
-  --color-error: #ff9b91;
-  --color-error-content: #381510;
-  --radius-selector: 0.65rem;
-  --radius-field: 0.65rem;
-  --radius-box: 0.9rem;
+  --color-base-100: #1c1e22;
+  --color-base-200: #1c1d20;
+  --color-base-300: #2e3135;
+  --color-base-content: #edeef0;
+  --color-primary: #2781f6;
+  --color-primary-content: #ffffff;
+  --color-neutral: #b0b4ba;
+  --color-neutral-content: #111113;
+  --color-error: #ff949d;
+  --color-error-content: #191113;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -67,55 +49,129 @@
   --noise: 0;
 }
 
+/*
+ * Tokens de Chatwoot (dashboard/assets/scss/_next-colors.scss): escalas Radix
+ * en tripletas RGB, para usarlas como rgb(var(--slate-11)) o con alfa
+ * rgb(var(--blue-9) / 0.1). Solo los pasos que usa el panel.
+ */
 :root {
-  --bg: #f3f6f8;
-  --surface: #ffffff;
-  --surface-2: #f8f9fb;
-  --border: #e3e6eb;
-  --text: #1b2330;
-  --text-muted: #5f6b7a;
-  --brand: #183d65;
-  --brand-contrast: #ffffff;
-  --accent: #ffe36a;
-  --link: #2563c9;
+  --slate-1: 252 252 253;
+  --slate-2: 249 249 251;
+  --slate-3: 240 240 243;
+  --slate-4: 232 232 236;
+  --slate-5: 224 225 230;
+  --slate-6: 217 217 224;
+  --slate-7: 205 206 214;
+  --slate-9: 139 141 152;
+  --slate-10: 128 131 141;
+  --slate-11: 96 100 108;
+  --slate-12: 28 32 36;
 
-  --si: #137a3f;
-  --si-bg: #e3f5ea;
-  --no: #b42318;
-  --no-bg: #fde8e6;
-  --revision: #9a5b00;
-  --revision-bg: #fff2d6;
-  --sin-revision: #137a3f;
-  --sin-revision-bg: #e3f5ea;
-  --sin: #5f6b7a;
-  --sin-bg: #eceff3;
+  --blue-3: 233 243 255;
+  --blue-9: 39 129 246;
+  --blue-10: 16 115 233;
+  --blue-11: 8 109 224;
 
-  --radius: 14px;
-  --shadow: 0 8px 24px rgb(18 39 60 / 0.04);
+  --amber-3: 255 247 194;
+  --amber-9: 255 197 61;
+  --amber-11: 171 100 0;
+  --amber-12: 79 52 34;
+
+  --teal-3: 224 248 243;
+  --teal-9: 18 165 148;
+  --teal-11: 0 133 115;
+
+  --ruby-3: 254 234 237;
+  --ruby-9: 229 70 102;
+  --ruby-11: 202 36 77;
+
+  --background-color: 247 247 247;
+  --card-color: 255 255 255;
+  --solid-1: 255 255 255;
+  --solid-active: 255 255 255;
+  --solid-blue: 218 236 255;
+  --solid-amber: 255 228 181;
+  --border-weak: 234 234 234;
+  --border-strong: 226 227 231;
+  --border-container: 236 236 236;
+  --alpha-1: 215 215 215 / 0.22;
+  --alpha-2: 196 197 198 / 0.22;
+  --input-background: 0 0 0 / 0.03;
+  --overlay: 0 0 0 / 0.12;
+
+  /* Nombres del panel sobre los de Chatwoot (los usan todos los componentes). */
+  --bg: rgb(var(--background-color));
+  --surface: rgb(var(--card-color));
+  --surface-2: rgb(var(--slate-2));
+  --border: rgb(var(--border-weak));
+  --text: rgb(var(--slate-12));
+  --text-muted: rgb(var(--slate-11));
+  --text-faint: rgb(var(--slate-10));
+  --brand: rgb(var(--blue-9));
+  --link: rgb(var(--blue-11));
+
+  --si: rgb(var(--teal-11));
+  --si-bg: rgb(var(--teal-3));
+  --no: rgb(var(--ruby-11));
+  --no-bg: rgb(var(--ruby-3));
+  --revision: rgb(var(--amber-11));
+  --revision-bg: rgb(var(--amber-3));
+  --sin: rgb(var(--slate-11));
+  --sin-bg: rgb(var(--slate-3));
+
+  --radius: 12px;
+  --shadow: none;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101923;
-    --surface: #17212d;
-    --surface-2: #1e2b39;
-    --border: #2b3948;
-    --text: #e9eef4;
-    --text-muted: #a7b6c5;
-    --brand: #142e49;
-    --link: #84b9ef;
-    --si: #64cc9a;
-    --si-bg: #173929;
-    --no: #ff9b91;
-    --no-bg: #3d2221;
-    --revision: #ffc66b;
-    --revision-bg: #3c2e19;
-    --sin-revision: #64cc9a;
-    --sin-revision-bg: #173929;
-    --sin: #a7b6c5;
-    --sin-bg: #283544;
-    --shadow: none;
+    --slate-1: 17 17 19;
+    --slate-2: 24 25 27;
+    --slate-3: 33 34 37;
+    --slate-4: 39 42 45;
+    --slate-5: 46 49 53;
+    --slate-6: 54 58 63;
+    --slate-7: 67 72 78;
+    --slate-9: 105 110 119;
+    --slate-10: 119 123 132;
+    --slate-11: 176 180 186;
+    --slate-12: 237 238 240;
+
+    --blue-3: 15 39 72;
+    --blue-9: 39 129 246;
+    --blue-10: 21 116 231;
+    --blue-11: 126 182 255;
+
+    --amber-3: 48 32 8;
+    --amber-9: 255 197 61;
+    --amber-11: 255 202 22;
+    --amber-12: 255 231 179;
+
+    --teal-3: 13 45 42;
+    --teal-9: 18 165 148;
+    --teal-11: 11 216 182;
+
+    --ruby-3: 58 20 30;
+    --ruby-9: 229 70 102;
+    --ruby-11: 255 148 157;
+
+    --background-color: 28 29 32;
+    --card-color: 28 30 34;
+    --solid-1: 23 23 26;
+    --solid-active: 53 57 66;
+    --solid-blue: 15 57 102;
+    --solid-amber: 56 50 41;
+    --border-weak: 31 31 37;
+    --border-strong: 46 45 50;
+    --border-container: 255 255 255 / 0.06;
+    --alpha-1: 35 36 42 / 0.8;
+    --alpha-2: 147 153 176 / 0.12;
+    --input-background: 255 255 255 / 0.02;
+    --overlay: 0 0 0 / 0.4;
+
+    /* En oscuro el borde débil casi no se ve: las cards usan el fuerte. */
+    --border: rgb(var(--border-strong));
     color-scheme: dark;
   }
 }
@@ -124,10 +180,12 @@
 
 html, body { margin: 0; }
 
+/* La misma pila que el dashboard de Chatwoot (tailwind.config.js). */
 body {
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.5 Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font: 14px/1.5 -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Tahoma, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 a { color: var(--link); text-decoration: none; }
@@ -135,24 +193,82 @@ a:hover { text-decoration: underline; }
 
 .container { max-width: 1320px; margin: 0 auto; padding: 0 24px; }
 
+/* Card de Chatwoot: superficie plana con un contorno fino. */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
 }
 
 .muted { color: var(--text-muted); }
 
-.btn { text-decoration: none !important; font-weight: 650; }
-/* `a` de arriba no tiene capa y le gana a daisyUI: sin esto, un link
-   .btn-primary queda con texto color link sobre fondo primario (invisible
-   en modo oscuro). */
-.btn-primary { color: var(--color-primary-content); }
-.btn-primary:hover { filter: brightness(1.08); }
-.btn[aria-disabled='true'] { opacity: 0.45; pointer-events: none; }
+/*
+ * Botones de Chatwoot (components-next/button): rounded-lg, texto 14px y un
+ * contorno de 1px por dentro. Sin modificador es el "faded" gris; -primary el
+ * sólido azul; -outline el de contorno; -ghost sin fondo. Tamaños: md (40),
+ * sm (32), xs (24). Sin capa, para ganarle a daisyUI.
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  background: rgb(var(--slate-9) / 0.1);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+  text-decoration: none !important;
+  transition: background-color 0.1s ease-out, filter 0.1s ease-out;
+}
+.btn:hover { background: rgb(var(--slate-9) / 0.2); }
+.btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.btn-sm { height: 32px; min-height: 32px; padding: 0 12px; }
+.btn-xs { height: 24px; min-height: 24px; padding: 0 8px; font-size: 12px; }
+.btn-primary,
+.btn-primary:hover { background: var(--brand); color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-outline { background: transparent; color: var(--text-muted); outline-color: rgb(var(--border-strong)); }
+.btn-outline:hover { background: rgb(var(--slate-9) / 0.1); color: var(--text); }
+.btn-ghost { background: transparent; color: var(--text); }
+.btn-ghost:hover { background: rgb(var(--alpha-2)); }
+.btn[aria-disabled='true'] { opacity: 0.5; pointer-events: none; }
 .btn.is-loading { pointer-events: none; }
-.btn:disabled { opacity: 0.7; cursor: progress; }
+.btn:disabled { opacity: 0.5; cursor: progress; }
+
+/* Campos de Chatwoot (_base.scss): fondo apenas tintado y contorno débil. */
+.input,
+.select,
+.textarea {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  outline: 1px solid rgb(var(--border-weak));
+  outline-offset: -1px;
+  background-color: rgb(var(--input-background));
+  color: var(--text);
+  font-size: 14px;
+  box-shadow: none;
+}
+.textarea { height: auto; padding: 8px 12px; }
+/* La flecha de daisyUI va dibujada a la derecha: que el texto no la pise. */
+.select { padding-right: 32px; }
+.input:hover,
+.select:hover,
+.textarea:hover { outline-color: rgb(var(--slate-6)); }
+.input:focus,
+.input:focus-within,
+.select:focus,
+.textarea:focus { outline: 1px solid var(--brand); }
 
 .spinner {
   width: 0.9em;
@@ -170,10 +286,10 @@ a:hover { text-decoration: underline; }
   top: 0;
   left: 0;
   width: 100%;
-  height: 3px;
+  height: 2px;
   overflow: hidden;
   pointer-events: none;
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: rgb(var(--blue-9) / 0.2);
 }
 .nav-progress[hidden] { display: none; }
 .nav-progress::after {
@@ -183,7 +299,7 @@ a:hover { text-decoration: underline; }
   left: 0;
   height: 100%;
   width: 35%;
-  background: var(--accent);
+  background: var(--brand);
   animation: nav-progress 1.05s ease-in-out infinite;
 }
 
@@ -197,8 +313,8 @@ html.is-navigating input {
 }
 
 img.img-loading {
-  background-color: #eceff3;
-  background-image: linear-gradient(90deg, #eceff3 0%, #f7f8fa 45%, #eceff3 100%);
+  background-color: rgb(var(--slate-3));
+  background-image: linear-gradient(90deg, rgb(var(--slate-3)) 0%, rgb(var(--slate-2)) 45%, rgb(var(--slate-3)) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.15s ease-in-out infinite;
 }
@@ -234,15 +350,20 @@ img.img-loading {
   .nav-progress::after { width: 100%; }
 }
 
+/* Banners de Chatwoot: fondo del paso 3, texto del 11, sin borde. */
 .alert {
-  padding: 12px 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  margin: 16px 0;
+  display: block;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(var(--slate-3));
+  color: var(--text);
+  font-size: 14px;
+  margin: 12px 0;
 }
-.alert-error { border-color: var(--no); background: var(--no-bg); color: var(--no); }
-.alert-info { border-color: var(--revision); background: var(--revision-bg); color: var(--revision); }
+.alert-error { background: var(--no-bg); color: var(--no); }
+.alert-info { background: var(--revision-bg); color: var(--revision); }
+.alert-success { background: var(--si-bg); color: var(--si); }
 
 @media (max-width: 640px) {
   .container { padding-inline: 16px; }
