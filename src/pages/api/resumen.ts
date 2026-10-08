@@ -8,7 +8,7 @@ import { countQuestions } from '../../lib/ml-api';
  *
  *   sinResponder  total de ML con status UNANSWERED
  *   respondidas   total de ML con status ANSWERED
- *   pendientes    filas `pendiente` de esa cuenta en la API de repuestos
+ *   pendientes    filas `pendiente` de esa cuenta en la tabla de revisión
  *
  * Cada uno falla por separado (queda `null` y la UI muestra "—"). Se cachea
  * un minuto por cuenta: navegar entre páginas no vuelve a pegarle a ML.

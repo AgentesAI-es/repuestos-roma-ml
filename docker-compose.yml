@@ -3,6 +3,9 @@
 # - El dominio se asigna en la pestaña "Domains" apuntando al puerto 4321 del servicio "web";
 #   Dokploy/Traefik enruta por la red interna, por eso no se publican puertos en el host.
 # - Para probar en local: docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+# - `db` es el Postgres propio (cola de revisión). Solo se ve desde la red
+#   interna del compose: no se publica ni entra en dokploy-network. Las
+#   migraciones las aplica `web` solo, al primer uso.
 
 services:
   web:
@@ -12,9 +15,13 @@ services:
     restart: unless-stopped
     expose:
       - "4321"
-    # Traefik de Dokploy solo alcanza servicios en dokploy-network (igual que la
-    # API de repuestos). Sin esto el dominio da 502/404 con el contenedor sano.
+    depends_on:
+      db:
+        condition: service_healthy
+    # Traefik de Dokploy solo alcanza servicios en dokploy-network. Sin esto el
+    # dominio da 502/404 con el contenedor sano. `default` es la red con `db`.
     networks:
+      - default
       - dokploy-network
     environment:
       HOST: 0.0.0.0
@@ -22,10 +29,12 @@ services:
       ML_API_URL: ${ML_API_URL:-https://ml-repuestosroma.agentesai.es}
       ML_API_TOKEN: ${ML_API_TOKEN:?Definí ML_API_TOKEN}
       ML_CONNECTION_ID: ${ML_CONNECTION_ID:-}
-      REPUESTOS_API_URL: ${REPUESTOS_API_URL:-}
-      REPUESTOS_API_TOKEN: ${REPUESTOS_API_TOKEN:-}
-      AGENT_MOCK: ${AGENT_MOCK:-false}
+      DATABASE_URL: postgres://${POSTGRES_USER:-hmml}:${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-hmml}
+      TOOL_API_KEY: ${TOOL_API_KEY:-}
       CHATWOOT_URL: ${CHATWOOT_URL:-}
+      CHATWOOT_BOT_TOKEN: ${CHATWOOT_BOT_TOKEN:-}
+      CHATWOOT_TIMEOUT_MS: ${CHATWOOT_TIMEOUT_MS:-8000}
+      ML_RESPUESTA_PUBLICA: ${ML_RESPUESTA_PUBLICA:-false}
       CHATWOOT_ACCOUNT_ID: ${CHATWOOT_ACCOUNT_ID:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       DASHBOARD_USER: ${DASHBOARD_USER:-}
@@ -36,6 +45,26 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hmml}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-hmml}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db-data:
 
 networks:
   dokploy-network:

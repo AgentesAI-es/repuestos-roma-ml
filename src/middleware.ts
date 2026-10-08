@@ -10,7 +10,9 @@ import {
   readSession,
 } from './lib/auth';
 
-const PUBLIC_PATHS = ['/health', '/auth/chatwoot', '/login'];
+// `/api/tool-execution` lo llama el framework del agente, no una persona: se
+// autentica solo, con TOOL_API_KEY.
+const PUBLIC_PATHS = ['/health', '/auth/chatwoot', '/login', '/api/tool-execution'];
 
 /**
  * Acceso al panel:

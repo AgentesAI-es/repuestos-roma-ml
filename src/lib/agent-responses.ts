@@ -1,20 +1,15 @@
 /**
- * Respuestas del agente (human in the loop), desde la API de repuestos.
- *
- *   GET   {REPUESTOS_API_URL}/v1/respuestas-agente?questionIds=1,2,3
- *   PATCH {REPUESTOS_API_URL}/v1/respuestas-agente/{id}   { revisadoPor, respuesta? }
- *
- * Autenticación con `x-api-key: REPUESTOS_API_TOKEN` (la API_KEY de esa API).
- * Se llama solo desde el servidor de Astro: la clave nunca llega al navegador.
+ * Respuestas del agente (human in the loop) para las vistas, desde la tabla
+ * `respuesta_agente` de la base propia (`server/revision-db.ts`).
  *
  * La tabla solo tiene lo que el agente mandó pidiendo revisión. Lo que
  * respondió sin revisión no está: mientras las respuestas sean notas privadas
  * (fase de desarrollo), esas preguntas se ven como "sin responder".
  *
- * Si REPUESTOS_API_URL no está configurada, no hay datos del agente; con
- * AGENT_MOCK=true se generan estados simulados para previsualizar la UI.
+ * Sin DATABASE_URL no hay datos del agente: el panel muestra solo lo de ML.
  */
-import { AGENT_MOCK, REPUESTOS_API_URL, REPUESTOS_API_TOKEN } from 'astro:env/server';
+import { dbConfigurada } from './server/db';
+import { listarRespuestas, type FilaRevision } from './server/revision-db';
 import type { AgentResponse, AgentStatus, Question } from './types';
 
 /** La fila vigente de cada pregunta (la más reciente), por ID de pregunta. */
@@ -49,151 +44,54 @@ export function agentStatusOf(map: AgentResponseMap, question: Pick<Question, 'i
   return 'sin_responder';
 }
 
-export function agentSource(): 'repuestos' | 'mock' | 'none' {
-  if (AGENT_MOCK) return 'mock';
-  if (REPUESTOS_API_URL) return 'repuestos';
-  return 'none';
+export function agentSource(): 'db' | 'none' {
+  return dbConfigurada() ? 'db' : 'none';
 }
+
+/** Las fechas, como texto: es lo que muestran las vistas. */
+export const serializar = (f: FilaRevision): AgentResponse => ({
+  id: f.id,
+  creadoEn: f.creadoEn.toISOString(),
+  questionId: f.questionId,
+  publicacionId: f.publicacionId,
+  meliConnectionId: f.meliConnectionId,
+  respuestaPropuesta: f.respuestaPropuesta,
+  respuestaEnviada: f.respuestaEnviada,
+  status: f.status,
+  revisadoPor: f.revisadoPor,
+  revisadoEn: f.revisadoEn?.toISOString() ?? null,
+});
 
 export async function getAgentResponses(questionIds: number[]): Promise<AgentResponseMap> {
-  if (questionIds.length === 0) return new Map();
-  switch (agentSource()) {
-    case 'mock':
-      return mockResponses(questionIds);
-    case 'repuestos':
-      try {
-        return await fetchFromRepuestos(questionIds);
-      } catch (err) {
-        // La vista de preguntas no debe caerse si la API de repuestos falla.
-        console.error('[agent-responses]', err);
-        return new Map();
-      }
-    default:
-      return new Map();
+  if (questionIds.length === 0 || agentSource() === 'none') return new Map();
+  try {
+    const { filas } = await listarRespuestas({ questionIds: questionIds.map(String), limite: questionIds.length });
+    // Una fila por pregunta (question_id es único).
+    return new Map(filas.map((f) => [Number(f.questionId), serializar(f)]));
+  } catch (err) {
+    // La vista de preguntas no debe caerse si la base falla.
+    console.error('[agent-responses]', err);
+    return new Map();
   }
-}
-
-function headers(): Record<string, string> {
-  const h: Record<string, string> = { Accept: 'application/json' };
-  if (REPUESTOS_API_TOKEN) h['x-api-key'] = REPUESTOS_API_TOKEN;
-  return h;
-}
-
-async function fetchFromRepuestos(questionIds: number[]): Promise<AgentResponseMap> {
-  const url = new URL('/v1/respuestas-agente', REPUESTOS_API_URL);
-  // La API acepta hasta 100 por llamada; una página del panel son 50.
-  url.searchParams.set('questionIds', questionIds.slice(0, 100).join(','));
-
-  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`API repuestos respondió ${res.status}`);
-  const body = (await res.json()) as { respuestas?: unknown };
-  if (!Array.isArray(body.respuestas)) throw new Error('API repuestos devolvió respuestas inválidas');
-
-  // Vienen de la más nueva a la más vieja: la primera de cada pregunta es la vigente.
-  const map: AgentResponseMap = new Map();
-  for (const value of body.respuestas as AgentResponse[]) {
-    const id = Number(value?.questionId);
-    if (!Number.isSafeInteger(id) || map.has(id)) continue;
-    map.set(id, value);
-  }
-  return map;
 }
 
 /**
  * Cuántas respuestas pendientes de revisión tiene una cuenta de ML. `null` si
- * no hay API de repuestos o falló (la UI muestra "—", no un cero falso).
+ * no hay base (la UI muestra "—", no un cero falso). Tira si la base falla.
  */
 export async function countPending(connectionId: number): Promise<number | null> {
-  if (agentSource() !== 'repuestos') return null;
-  const url = new URL('/v1/respuestas-agente', REPUESTOS_API_URL);
-  url.searchParams.set('status', 'pendiente');
-  url.searchParams.set('meliConnectionId', String(connectionId));
-  url.searchParams.set('limite', '1');
-  const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`API repuestos respondió ${res.status}`);
-  const { total } = (await res.json()) as { total?: unknown };
-  return typeof total === 'number' ? total : null;
+  if (agentSource() === 'none') return null;
+  const { total } = await listarRespuestas({ statuses: ['pendiente'], meliConnectionId: connectionId, limite: 0 });
+  return total;
 }
 
 /**
  * Las filas de una cuenta con alguno de esos estados, una por pregunta. Es lo
  * que arma las pestañas "Para revisar" (`pendiente`) y "Aprobadas" (`aprobado`
  * y `editado`): salen de la tabla y no de una página de ML, así se ven todas
- * aunque ML las tenga en cualquier estado. Hasta 200 por estado (el tope de la API).
+ * aunque ML las tenga en cualquier estado. Hasta 200 (cada una pide su detalle a ML).
  */
-export async function listByStatus(
-  connectionId: number,
-  statuses: AgentResponse['status'][],
-): Promise<AgentResponse[]> {
-  const porEstado = await Promise.all(
-    statuses.map(async (status) => {
-      const url = new URL('/v1/respuestas-agente', REPUESTOS_API_URL);
-      url.searchParams.set('status', status);
-      url.searchParams.set('meliConnectionId', String(connectionId));
-      url.searchParams.set('limite', '200');
-      const res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(10_000) });
-      if (!res.ok) throw new Error(`API repuestos respondió ${res.status}`);
-      const { respuestas } = (await res.json()) as { respuestas?: AgentResponse[] };
-      return respuestas ?? [];
-    }),
-  );
-  const vistas = new Set<string>();
-  return porEstado.flat().filter((r) => r.questionId && !vistas.has(r.questionId) && vistas.add(r.questionId));
-}
-
-export class RevisionError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-  ) {
-    super(message);
-  }
-}
-
-/**
- * Resuelve una respuesta pendiente. Sin `respuesta` (o con el mismo texto del
- * agente) la API la deja `aprobado`; con otro texto, `editado`. En los dos casos
- * deja una nota privada en Chatwoot con el texto final. No publica nada en ML.
- */
-export async function resolveRevision(id: string, revisadoPor: string, respuesta?: string) {
-  if (!REPUESTOS_API_URL) throw new RevisionError('La API de repuestos no está configurada.', 500);
-  const url = new URL(`/v1/respuestas-agente/${encodeURIComponent(id)}`, REPUESTOS_API_URL);
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: { ...headers(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ revisadoPor, ...(respuesta !== undefined ? { respuesta } : {}) }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new RevisionError(body?.error ?? `API repuestos respondió ${res.status}`, res.status);
-  }
-  return (await res.json()) as AgentResponse;
-}
-
-// --- Mock (solo para previsualizar) ---
-
-function mockResponses(questionIds: number[]): AgentResponseMap {
-  const muestras: (Pick<AgentResponse, 'status' | 'respuestaPropuesta' | 'respuestaEnviada'> | null)[] = [
-    { status: 'pendiente', respuestaPropuesta: 'Hola, estamos verificando la compatibilidad con tu modelo exacto y te respondemos a la brevedad.', respuestaEnviada: null },
-    { status: 'aprobado', respuestaPropuesta: '¡Hola! Sí, es compatible con tu vehículo. ¡Saludos!', respuestaEnviada: '¡Hola! Sí, es compatible con tu vehículo. ¡Saludos!' },
-    { status: 'editado', respuestaPropuesta: 'Hola, no es compatible con ese modelo. ¡Saludos!', respuestaEnviada: 'Hola, para ese modelo va el código 01MI0043902. Indicanos el chasis y lo confirmamos. ¡Saludos!' },
-    null,
-  ];
-  const map: AgentResponseMap = new Map();
-  for (const id of questionIds) {
-    const muestra = muestras[id % muestras.length];
-    if (!muestra) continue;
-    map.set(id, {
-      id: `mock-${id}`,
-      creadoEn: new Date().toISOString(),
-      questionId: String(id),
-      publicacionId: null,
-      cuenta: null,
-      revisadoPor: muestra.status === 'pendiente' ? null : 'mock',
-      revisadoEn: muestra.status === 'pendiente' ? null : new Date().toISOString(),
-      ...muestra,
-    });
-  }
-  return map;
+export async function listByStatus(connectionId: number, statuses: AgentResponse['status'][]): Promise<AgentResponse[]> {
+  const { filas } = await listarRespuestas({ statuses, meliConnectionId: connectionId, limite: 200 });
+  return filas.filter((f) => f.questionId).map(serializar);
 }

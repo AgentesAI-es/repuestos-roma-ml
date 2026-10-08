@@ -1,11 +1,11 @@
 import type { APIRoute } from 'astro';
-import { RevisionError, resolveRevision } from '../../lib/agent-responses';
+import { HttpError } from '../../lib/server/errors';
+import { resolverRevision } from '../../lib/server/revision';
 import { SESSION_COOKIE, readSession } from '../../lib/auth';
 
 /**
  * Aprobar o editar una respuesta del agente desde el detalle de la
- * pregunta. Recibe el form (sin JS) y reenvía el PATCH a la API de repuestos
- * desde el servidor, así la API key no pasa por el navegador.
+ * pregunta. Recibe el form (sin JS) y resuelve la fila en la base propia.
  *
  * Un solo form: manda el texto del cuadro de respuesta y la API decide. Si
  * no cambió, queda aprobada; si cambió, editada (y deja una nota privada en
@@ -39,11 +39,11 @@ export const POST: APIRoute = async ({ request, redirect, cookies }) => {
 
   try {
     const sesion = await readSession(cookies.get(SESSION_COOKIE)?.value);
-    const fila = await resolveRevision(id, sesion?.name || usuarioDelPanel(request), respuesta || undefined);
+    const fila = await resolverRevision(id, sesion?.name || usuarioDelPanel(request), respuesta || undefined);
     return volver({ revision: fila.status });
   } catch (err) {
     console.error('[revision]', err);
-    const mensaje = err instanceof RevisionError ? err.message : 'No se pudo contactar la API de repuestos.';
+    const mensaje = err instanceof HttpError ? err.message : 'No se pudo resolver la revisión.';
     return volver({ revision_error: mensaje });
   }
 };

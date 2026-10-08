@@ -88,7 +88,7 @@ export interface QuestionDetailResponse {
   publication: Publication | null;
 }
 
-// Respuestas del agente (API de repuestos: GET /v1/respuestas-agente)
+// Respuestas del agente (tabla `respuesta_agente` de la base propia)
 
 /**
  * Lo que muestra la UI por pregunta:
@@ -111,7 +111,7 @@ export interface AgentResponse {
   /** Solo dígitos, como texto (los IDs de ML no entran en un int de 32 bits). */
   questionId: string | null;
   publicacionId: string | null;
-  cuenta: string | null;
+  meliConnectionId: number | null;
   /** Lo que propuso el agente. */
   respuestaPropuesta: string;
   /** Lo que se envía al final: null si está pendiente; la propuesta si se aprobó, el texto corregido si se editó. */

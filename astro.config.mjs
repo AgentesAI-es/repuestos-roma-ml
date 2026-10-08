@@ -29,16 +29,26 @@ export default defineConfig({
       ML_API_TOKEN: envField.string({ context: 'server', access: 'secret', optional: true }),
       ML_CONNECTION_ID: envField.string({ context: 'server', access: 'secret', optional: true }),
 
-      // API de repuestos (respuestas del agente) — fase 2
-      REPUESTOS_API_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
-      REPUESTOS_API_TOKEN: envField.string({ context: 'server', access: 'secret', optional: true }),
-      // Genera estados de agente simulados para previsualizar la UI mientras no exista la tabla
-      AGENT_MOCK: envField.boolean({ context: 'server', access: 'secret', default: false }),
+      // Postgres propio: la tabla respuesta_agente (cola de revisión). Las
+      // migraciones se aplican solas al primer uso. Vacío = panel sin datos del agente.
+      DATABASE_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
 
-      // Acceso embebido en Chatwoot (sección custom del sidebar)
+      // Tools del agente (POST /api/tool-execution): la key que manda el framework
+      // en `x-api-key` (o `?apiKey=`). Vacía = endpoint deshabilitado (503).
+      TOOL_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
+
+      // Chatwoot: acceso embebido (sección custom del sidebar) y destino de las
+      // respuestas del agente y de las notas de revisión.
       CHATWOOT_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
       CHATWOOT_ACCOUNT_ID: envField.number({ context: 'server', access: 'secret', optional: true }),
       SESSION_SECRET: envField.string({ context: 'server', access: 'secret', optional: true }),
+      // Token del bot. Si está vacío, enviar_respuesta usa el `context.bot_key` del
+      // framework; aprobar/editar desde el panel lo necesita (ahí no hay bot_key).
+      CHATWOOT_BOT_TOKEN: envField.string({ context: 'server', access: 'secret', optional: true }),
+      CHATWOOT_TIMEOUT_MS: envField.number({ context: 'server', access: 'secret', default: 8000 }),
+      // Un mensaje público en el inbox de ML se publica como respuesta en Mercado
+      // Libre y no se puede deshacer. Apagado, todo sale como nota privada.
+      ML_RESPUESTA_PUBLICA: envField.boolean({ context: 'server', access: 'secret', default: false }),
 
       // Protección básica del panel para acceso directo fuera de Chatwoot
       DASHBOARD_USER: envField.string({ context: 'server', access: 'secret', optional: true }),

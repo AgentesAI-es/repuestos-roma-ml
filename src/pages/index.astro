@@ -22,10 +22,10 @@ const params = Astro.url.searchParams;
  * Las pestañas son el único filtro de estado, ordenadas por cuánta atención
  * piden. Cada una trae sus datos de otra forma:
  *
- *   pendiente      las filas `pendiente` de la API de repuestos, con el detalle
+ *   pendiente      las filas `pendiente` de la tabla de revisión, con el detalle
  *                  de cada pregunta desde ML (todas, no solo las de una página)
  *   sin_responder  UNANSWERED de ML, sin las que ya tienen revisión
- *   aprobadas      las filas `aprobado` y `editado` de la API de repuestos: lo que
+ *   aprobadas      las filas `aprobado` y `editado` de la tabla de revisión: lo que
  *                  respondió el agente con el visto bueno de una persona
  *   respondida     todas las de ML que estén respondidas en ML, aprobadas o editadas
  *   todas          todas las de ML
@@ -41,7 +41,7 @@ const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: 'respondida', label: 'Respondidas', hint: AGENT_STATUS_META.respondida.hint },
   { id: 'todas', label: 'Todas', hint: 'Todas las preguntas de la cuenta' },
 ];
-// Las que salen de la tabla de repuestos y no de una página de ML.
+// Las que salen de la tabla de revisión y no de una página de ML.
 const TAB_STATUSES: Partial<Record<Tab, AgentResponse['status'][]>> = {
   pendiente: ['pendiente'],
   aprobadas: ['aprobado', 'editado'],
@@ -80,7 +80,7 @@ try {
     if (!tabElegida && pendingCount) tab = 'pendiente';
 
     const tableStatuses = TAB_STATUSES[tab];
-    if (tableStatuses && agentSource() === 'repuestos') {
+    if (tableStatuses && agentSource() === 'db') {
       ({ questions, total, failedDetails } = await loadFromTable(connectionId, tableStatuses));
     } else {
       const data = await listQuestions({
@@ -233,7 +233,7 @@ const returnTo = hrefWith({});
       <p class="muted note">
         {hidden > 0 && `${hidden} de esta página de Mercado Libre están en otra pestaña. `}
         {failedDetails > 0 && `${failedDetails} preguntas de esta pestaña no se pudieron traer de Mercado Libre. `}
-        {agentSource() === 'none' && 'La revisión del agente aparece al conectar la API de repuestos.'}
+        {agentSource() === 'none' && 'La revisión del agente aparece al configurar la base (DATABASE_URL).'}
       </p>
     )
   }
