@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import { connectionName, resolveConnectionId } from '../lib/accounts';
 import { getConnections } from '../lib/ml-api';
+import { ultimoResumen } from '../lib/server/resumen';
 import type { Connection } from '../lib/types';
 
 interface Props {
@@ -30,6 +31,15 @@ try {
 }
 const actual = resolveConnectionId(cuentas, connectionId);
 
+// Las métricas que ya se conocen salen en el HTML: el esqueleto solo se ve la
+// primera vez (o después de reiniciar el server). El navegador las refresca igual.
+const numero = new Intl.NumberFormat('es-AR');
+const METRICAS = [
+  { k: 'pendientes', label: 'En revisión', title: 'Respuestas del agente pendientes de revisión' },
+  { k: 'sinResponder', label: 'Sin responder', title: 'Sin responder en Mercado Libre' },
+  { k: 'respondidas', label: 'Respondidas', title: 'Respondidas en Mercado Libre' },
+] as const;
+
 function iniciales(nombre: string) {
   const partes = nombre.trim().split(/\s+/).filter(Boolean);
   const letras = partes.length > 1 ? partes[0][0] + partes[partes.length - 1][0] : nombre.slice(0, 2);
@@ -56,12 +66,14 @@ function iniciales(nombre: string) {
             {cuentas.map((c) => {
               const nombre = connectionName(c);
               const secundario = c.nickname && c.nickname !== nombre ? c.nickname : null;
+              const resumen = ultimoResumen(c.id);
               return (
                 <a
                   href={`/?connection=${c.id}`}
-                  class:list={['account', { active: c.id === actual }]}
+                  class:list={['account', { active: c.id === actual, 'has-pending': (resumen?.pendientes ?? 0) > 0 }]}
                   aria-current={c.id === actual ? 'page' : undefined}
                   data-connection={c.id}
+                  data-precargar
                   data-actual={c.id === actual ? '1' : undefined}
                 >
                   <span class="account-id">
@@ -73,18 +85,17 @@ function iniciales(nombre: string) {
                     </span>
                   </span>
                   <span class="metrics">
-                    <span class="metric" title="Respuestas del agente pendientes de revisión">
-                      <span class="metric-value is-loading" data-k="pendientes"></span>
-                      <span class="metric-label">En revisión</span>
-                    </span>
-                    <span class="metric" title="Sin responder en Mercado Libre">
-                      <span class="metric-value is-loading" data-k="sinResponder"></span>
-                      <span class="metric-label">Sin responder</span>
-                    </span>
-                    <span class="metric" title="Respondidas en Mercado Libre">
-                      <span class="metric-value is-loading" data-k="respondidas"></span>
-                      <span class="metric-label">Respondidas</span>
-                    </span>
+                    {METRICAS.map((m) => {
+                      const valor = resumen?.[m.k];
+                      return (
+                        <span class="metric" title={m.title}>
+                          <span class:list={['metric-value', { 'is-loading': !resumen }]} data-k={m.k}>
+                            {resumen ? (typeof valor === 'number' ? numero.format(valor) : '—') : ''}
+                          </span>
+                          <span class="metric-label">{m.label}</span>
+                        </span>
+                      );
+                    })}
                   </span>
                 </a>
               );
@@ -165,6 +176,36 @@ function iniciales(nombre: string) {
           img.addEventListener('error', done, { once: true });
         });
 
+        // Precarga: al pasar el mouse (o el foco) por una cuenta o una pestaña,
+        // se pide esa página de fondo. La respuesta se tira: lo que sirve es que
+        // el server deja lo de ML en su caché, y el clic llega sin esperar a ML.
+        // No usa el caché del navegador: así la página sale con el estado del
+        // agente al momento del clic. Cada link, a lo sumo una vez cada 30 s.
+        var precargadas = {};
+        var precargaPendiente = null;
+        function precargar(link) {
+          var href = link.href;
+          if (href === location.href || Date.now() - (precargadas[href] || 0) < 30000) return;
+          precargadas[href] = Date.now();
+          fetch(href, { credentials: 'same-origin', priority: 'low' }).catch(function () {
+            delete precargadas[href];
+          });
+        }
+        function alApuntar(event) {
+          var link = event.target instanceof Element ? event.target.closest('a[data-precargar]') : null;
+          if (!link) return;
+          clearTimeout(precargaPendiente);
+          // Una pausa corta: pasar el mouse de largo no dispara nada.
+          precargaPendiente = setTimeout(function () {
+            precargar(link);
+          }, event.type === 'focusin' ? 0 : 80);
+        }
+        document.addEventListener('pointerover', alApuntar);
+        document.addEventListener('focusin', alApuntar);
+        document.addEventListener('pointerout', function () {
+          clearTimeout(precargaPendiente);
+        });
+
         window.addEventListener('pageshow', function () {
           root.classList.remove('is-navigating');
           if (bar) bar.hidden = true;
@@ -174,37 +215,57 @@ function iniciales(nombre: string) {
     </script>
     <script>
       // Conteos por cuenta, en segundo plano: la página ya está renderizada y
-      // usable mientras llegan. Primero la cuenta actual, después el resto en
-      // paralelo.
+      // usable mientras llegan. Si el server ya los conocía vienen en el HTML y
+      // esto solo los actualiza en el lugar, sin esqueleto. Primero la cuenta
+      // actual, después el resto en paralelo; y de nuevo cada minuto mientras
+      // la pestaña está a la vista.
       type Resumen = Record<'sinResponder' | 'pendientes' | 'respondidas', number | null>;
 
+      const REFRESCO_MS = 60_000;
       const tabs = [...document.querySelectorAll<HTMLElement>('.accounts [data-connection]')];
       const numero = new Intl.NumberFormat('es-AR');
 
-      function pintar(tab: HTMLElement, resumen: Resumen | null) {
+      function pintar(tab: HTMLElement, resumen: Resumen) {
         tab.querySelectorAll<HTMLElement>('[data-k]').forEach((el) => {
-          const valor = resumen?.[el.dataset.k as keyof Resumen];
+          const valor = resumen[el.dataset.k as keyof Resumen];
           el.textContent = typeof valor === 'number' ? numero.format(valor) : '—';
           el.classList.remove('is-loading');
         });
-        const pendientes = resumen?.pendientes ?? 0;
-        tab.classList.toggle('has-pending', pendientes > 0);
+        tab.classList.toggle('has-pending', (resumen.pendientes ?? 0) > 0);
       }
 
       async function cargar(tab: HTMLElement) {
+        let resumen: Resumen | null = null;
         try {
           const res = await fetch(`/api/resumen?connection=${tab.dataset.connection}`);
-          pintar(tab, res.ok ? ((await res.json()) as Resumen) : null);
-        } catch {
-          pintar(tab, null);
-        }
+          if (res.ok) resumen = (await res.json()) as Resumen;
+        } catch {}
+        if (resumen) pintar(tab, resumen);
+        // Si falla, queda el último número que se vio; "—" solo si nunca hubo uno.
+        else tab.querySelectorAll<HTMLElement>('[data-k].is-loading').forEach((el) => {
+          el.textContent = '—';
+          el.classList.remove('is-loading');
+        });
       }
 
-      const primera = tabs.find((t) => t.dataset.actual === '1');
-      (async () => {
+      let ultimo = 0;
+      async function refrescar() {
+        ultimo = Date.now();
+        const primera = tabs.find((t) => t.dataset.actual === '1');
         if (primera) await cargar(primera);
         await Promise.all(tabs.filter((t) => t !== primera).map(cargar));
-      })();
+      }
+
+      if (tabs.length) {
+        refrescar();
+        setInterval(() => {
+          if (document.visibilityState === 'visible') refrescar();
+        }, REFRESCO_MS);
+        // Al volver a la pestaña después de un rato, no esperar al próximo intervalo.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible' && Date.now() - ultimo >= REFRESCO_MS) refrescar();
+        });
+      }
     </script>
   </body>
 </html>

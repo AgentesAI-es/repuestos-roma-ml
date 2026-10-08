@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { HttpError } from '../../lib/server/errors';
 import { resolverRevision } from '../../lib/server/revision';
+import { invalidarResumen } from '../../lib/server/resumen';
 import { SESSION_COOKIE, readSession } from '../../lib/auth';
 
 /**
@@ -40,6 +41,8 @@ export const POST: APIRoute = async ({ request, redirect, cookies }) => {
   try {
     const sesion = await readSession(cookies.get(SESSION_COOKIE)?.value);
     const fila = await resolverRevision(id, sesion?.name || usuarioDelPanel(request), respuesta || undefined);
+    // Una pendiente menos: que la card de la cuenta no muestre el número viejo.
+    if (fila.meliConnectionId) invalidarResumen(fila.meliConnectionId);
     return volver({ revision: fila.status });
   } catch (err) {
     console.error('[revision]', err);

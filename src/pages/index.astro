@@ -1,7 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import QuestionCard from '../components/QuestionCard.astro';
-import { ApiError, getConnections, getQuestion, listQuestions } from '../lib/ml-api';
+import { ApiError, getConnections } from '../lib/ml-api';
+import { getQuestionCacheada, listQuestionsCacheada } from '../lib/server/ml-cache';
 import { resolveConnectionId } from '../lib/accounts';
 import {
   AGENT_STATUS_META,
@@ -55,6 +56,8 @@ const sort = params.get('sort') === 'asc' ? 'asc' : 'desc';
 const from = params.get('from') ?? '';
 const to = params.get('to') ?? '';
 const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+// "Actualizar": lo de ML se pide de nuevo aunque esté en el caché.
+const forzar = params.get('actualizar') === '1';
 
 let connections: Connection[] = [];
 let questions: QuestionListItem[] = [];
@@ -83,15 +86,18 @@ try {
     if (tableStatuses && agentSource() === 'db') {
       ({ questions, total, failedDetails } = await loadFromTable(connectionId, tableStatuses));
     } else {
-      const data = await listQuestions({
-        connection_id: connectionId,
-        status: tab === 'sin_responder' ? 'UNANSWERED' : undefined,
-        sort,
-        from_date: dayToIso(from),
-        to_date: dayToIso(to, true),
-        offset: (page - 1) * PAGE_SIZE,
-        limit: PAGE_SIZE,
-      });
+      const data = await listQuestionsCacheada(
+        {
+          connection_id: connectionId,
+          status: tab === 'sin_responder' ? 'UNANSWERED' : undefined,
+          sort,
+          from_date: dayToIso(from),
+          to_date: dayToIso(to, true),
+          offset: (page - 1) * PAGE_SIZE,
+          limit: PAGE_SIZE,
+        },
+        { forzar },
+      );
       questions = data.questions;
       total = data.total;
     }
@@ -120,7 +126,7 @@ const shown = totalPages === 1 ? visible.length : total;
 /** Las filas de la tabla de la cuenta, con fechas y orden aplicados acá (no pasan por el filtro de ML). */
 async function loadFromTable(connection: number, statuses: AgentResponse['status'][]) {
   const rows = await listByStatus(connection, statuses);
-  const details = await Promise.allSettled(rows.map((r) => getQuestion(r.questionId!, connection)));
+  const details = await Promise.allSettled(rows.map((r) => getQuestionCacheada(r.questionId!, connection, { forzar })));
   const desde = dayToIso(from);
   const hasta = dayToIso(to, true);
   const all = details
@@ -141,7 +147,7 @@ const revisionError = params.get('revision_error');
 
 function hrefWith(changes: Record<string, string | number | null>) {
   const u = new URL(Astro.url);
-  for (const k of ['agent', 'status', 'revision', 'revision_error']) u.searchParams.delete(k);
+  for (const k of ['agent', 'status', 'revision', 'revision_error', 'actualizar']) u.searchParams.delete(k);
   for (const [k, v] of Object.entries(changes)) {
     if (v === null || v === '') u.searchParams.delete(k);
     else u.searchParams.set(k, String(v));
@@ -190,6 +196,7 @@ const returnTo = hrefWith({});
         TABS.map((t) => (
           <a
             href={hrefWith({ tab: t.id, page: null })}
+            data-precargar
             class:list={['state-tab', t.id, { active: tab === t.id }]}
             title={t.hint}
             aria-current={tab === t.id ? 'page' : undefined}
@@ -221,7 +228,7 @@ const returnTo = hrefWith({});
       </label>
       {(from || to) && <a href={hrefWith({ from: null, to: null, page: null })} class="btn btn-sm btn-ghost clear">Quitar fechas</a>}
       <button type="submit" class="sr-only">Filtrar</button>
-      <a href={Astro.url.pathname + Astro.url.search} class="btn btn-sm btn-outline refresh" data-loading="Actualizando…" aria-label="Actualizar preguntas">
+      <a href={hrefWith({ actualizar: 1 })} class="btn btn-sm btn-outline refresh" data-loading="Actualizando…" aria-label="Actualizar preguntas">
         <span aria-hidden="true">↻</span><span class="refresh-label">Actualizar</span>
       </a>
     </form>
