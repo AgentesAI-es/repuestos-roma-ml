@@ -161,8 +161,9 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
   .reply.full { display: block; outline: 1px dashed rgb(var(--amber-12) / 0.5); outline-offset: -1px; }
   .reply-label { font-weight: 600; margin-right: 6px; color: inherit; }
   .reply:not(.proposed) .reply-label { color: var(--text); }
-  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; min-width: 150px; }
-  /* Aprobar arriba, Editar abajo, los dos del mismo ancho. */
+  /* Estado, Aprobar y Editar en columna, los tres del mismo ancho (el del más ancho). */
+  .side { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 150px; }
+  .side :global(.badge) { justify-content: center; }
   .actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
   .approve { margin: 0; }
   .approve .btn { width: 100%; }
