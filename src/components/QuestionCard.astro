@@ -61,16 +61,6 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
   <div class="side">
     <AgentBadge status={agentStatus} />
     <div class="actions">
-      {/* La bandeja abre el detalle en un modal; Ctrl+clic, en otra pestaña. */}
-      <a
-        href={detailHref}
-        class="btn btn-sm btn-outline"
-        data-detalle
-        data-pregunta={q.text}
-        title={pending ? 'Abre la pregunta para editar la propuesta antes de enviarla' : 'Abre el detalle de la pregunta'}
-      >
-        {pending ? '✎ Editar' : 'Ver detalle'}
-      </a>
       {
         pending && (
           <form method="post" action="/api/revision" class="approve">
@@ -84,6 +74,16 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
           </form>
         )
       }
+      {/* La bandeja abre el detalle en un modal; Ctrl+clic, en otra pestaña. */}
+      <a
+        href={detailHref}
+        class="btn btn-sm btn-outline"
+        data-detalle
+        data-pregunta={q.text}
+        title={pending ? 'Abre la pregunta para editar la propuesta antes de enviarla' : 'Abre el detalle de la pregunta'}
+      >
+        {pending ? '✎ Editar' : 'Ver detalle'}
+      </a>
     </div>
   </div>
 </article>
@@ -162,8 +162,10 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
   .reply-label { font-weight: 600; margin-right: 6px; color: inherit; }
   .reply:not(.proposed) .reply-label { color: var(--text); }
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; min-width: 150px; }
-  .actions { display: flex; gap: 8px; align-items: center; }
+  /* Aprobar arriba, Editar abajo, los dos del mismo ancho. */
+  .actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
   .approve { margin: 0; }
+  .approve .btn { width: 100%; }
 
   @media (max-width: 640px) {
     .q { grid-template-columns: 40px 1fr; gap: 10px 12px; padding: 12px 8px; }
