@@ -326,7 +326,7 @@ const returnTo = hrefWith({});
       const url = new URL(link.href);
       url.searchParams.set('embed', '1');
       const pregunta = modal.querySelector<HTMLElement>('[data-sk-pregunta]');
-      if (pregunta) pregunta.textContent = link.textContent?.trim() ?? '';
+      if (pregunta) pregunta.textContent = link.dataset.pregunta ?? '';
       modal.classList.add('cargando');
       frame.src = url.pathname + url.search;
       modal.showModal();

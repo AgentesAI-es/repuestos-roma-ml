@@ -32,8 +32,7 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
       {q.from?.nickname && <span class="muted">{q.from.nickname}</span>}
     </div>
 
-    {/* El link cubre toda la card (::after). La bandeja lo abre en un modal; Ctrl+clic, en otra pestaña. */}
-    <a href={detailHref} class="text" data-detalle>{q.text}</a>
+    <p class="text">{q.text}</p>
 
     {
       pub && (
@@ -61,25 +60,37 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
 
   <div class="side">
     <AgentBadge status={agentStatus} />
-    {
-      pending && (
-        <form method="post" action="/api/revision" class="approve">
-          <input type="hidden" name="id" value={agent!.id} />
-          <input type="hidden" name="question_id" value={q.id} />
-          {connectionId && <input type="hidden" name="connection" value={connectionId} />}
-          <input type="hidden" name="volver" value={returnTo} />
-          <button type="submit" class="btn btn-sm btn-primary" data-loading="Aprobando…" title="Aprueba la propuesta del agente tal cual">
-            ✓ Aprobar
-          </button>
-        </form>
-      )
-    }
+    <div class="actions">
+      {/* La bandeja abre el detalle en un modal; Ctrl+clic, en otra pestaña. */}
+      <a
+        href={detailHref}
+        class="btn btn-sm btn-outline"
+        data-detalle
+        data-pregunta={q.text}
+        title={pending ? 'Abre la pregunta para editar la propuesta antes de enviarla' : 'Abre el detalle de la pregunta'}
+      >
+        {pending ? '✎ Editar' : 'Ver detalle'}
+      </a>
+      {
+        pending && (
+          <form method="post" action="/api/revision" class="approve">
+            <input type="hidden" name="id" value={agent!.id} />
+            <input type="hidden" name="question_id" value={q.id} />
+            {connectionId && <input type="hidden" name="connection" value={connectionId} />}
+            <input type="hidden" name="volver" value={returnTo} />
+            <button type="submit" class="btn btn-sm btn-primary" data-loading="Aprobando…" title="Aprueba la propuesta del agente tal cual">
+              ✓ Aprobar
+            </button>
+          </form>
+        )
+      }
+    </div>
   </div>
 </article>
 
 <style>
   /* Fila de la lista de conversaciones de Chatwoot: sin card propia, separada
-     por una línea, con fondo al pasar el mouse. */
+     por una línea. No es clickeable: el detalle se abre con "Editar"/"Ver detalle". */
   .q {
     position: relative;
     display: grid;
@@ -88,7 +99,6 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
     padding: 14px 12px;
     border-radius: 8px;
     align-items: center;
-    transition: background-color 0.1s ease-out;
   }
   .q + :global(.q)::before {
     content: '';
@@ -98,8 +108,6 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
     right: 12px;
     border-top: 1px solid rgb(var(--border-weak));
   }
-  .q:hover { background: rgb(var(--alpha-1)); }
-  .q:hover::before, .q:hover + :global(.q)::before { border-color: transparent; }
   .thumb {
     width: 48px;
     height: 48px;
@@ -127,13 +135,7 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
     font-weight: 500;
     line-height: 1.45;
     overflow-wrap: anywhere;
-    text-decoration: none !important;
   }
-  .text::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
-  .text:focus-visible { outline: none; }
-  .q:has(.text:focus-visible) { outline: 2px solid var(--brand); outline-offset: -2px; }
-  /* Lo que tiene acción propia queda por encima del link de la fila. */
-  .pub a, .approve { position: relative; z-index: 1; }
   .pub { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pub a { color: inherit; }
   .pub a:hover { color: var(--link); }
@@ -160,6 +162,7 @@ const pending = agentStatus === 'pendiente' && agent?.status === 'pendiente';
   .reply-label { font-weight: 600; margin-right: 6px; color: inherit; }
   .reply:not(.proposed) .reply-label { color: var(--text); }
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; min-width: 150px; }
+  .actions { display: flex; gap: 8px; align-items: center; }
   .approve { margin: 0; }
 
   @media (max-width: 640px) {
