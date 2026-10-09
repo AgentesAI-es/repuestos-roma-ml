@@ -10,6 +10,77 @@ Es dueño de la revisión humana (human in the loop) de punta a punta:
 
 Una instalación por cliente (cada una con su Dokploy, su base y su `.env`).
 
+## Flujo
+
+De la pregunta en Mercado Libre a la respuesta revisada. El original editable está en [tldraw](https://www.tldraw.com/f/ldB10cpDMX09GRh4ADZGJ?d=v-423.207.2234.1262.flujo_documentado) (página "Flujo documentado"); si se cambia allá, actualizar también este diagrama.
+
+```mermaid
+flowchart TD
+    pregunta["<b>MERCADO LIBRE</b><br/>1. El comprador pregunta en una publicación"]
+    inbox["<b>CHATWOOT</b><br/>2. Entra a la inbox de ML como conversación<br/>(meli_item_id, buyer_id, question_id)"]
+    bot["<b>CHATWOOT</b><br/>3. Bot de Chatwoot<br/>junta los datos de la pregunta y pide el contexto"]
+    contexto["<b>API REPUESTOS ROMA</b><br/>4. GET /v1/publicaciones-ml/{id}/contexto"]
+    nota_ctx>"<b>Qué trae el contexto</b><br/>• artículo del ERP: precio, stock, si está de baja<br/>• preguntas anteriores del comprador<br/>• ficha de ML (marca, nro. de pieza)<br/>• respuestas relacionadas<br/>Cada parte falla sola: siempre responde 200"]
+    apiml["<b>API de ML</b><br/>historial del comprador · ficha de la publicación · respuestas a otros compradores"]
+    jev["<b>OpenRouter · Jev</b><br/>elige las respuestas relacionadas que sirven (hasta 5)"]
+    agente["<b>FRAMEWORK DE AGENTES</b><br/>5. Agente<br/>recibe contexto + pregunta del bot"]
+    compat["<b>API REPUESTOS ROMA</b><br/>6. Tool consultar_compatibilidad (opcional)<br/>POST /v1/tool-execution"]
+    autopartes["<b>API de autopartes</b><br/>veredicto: compatible · incompleto · incompatible"]
+    enviar["<b>HM-ML</b><br/>7. Tool enviar_respuesta<br/>POST /api/tool-execution<br/>{ respuesta, revision }"]
+    q_rev{"¿revision: true?"}
+    q_pub{"¿ML_RESPUESTA_PUBLICA = true?"}
+    publica["<b>CHATWOOT</b><br/>Mensaje público → ML lo publica<br/>⚠ no se puede deshacer"]
+    privada_sin["<b>CHATWOOT</b><br/>Nota privada<br/>No entra a la cola: el panel la muestra 'Sin responder'"]
+    pendiente["<b>HM-ML</b><br/>8. Fila en respuesta_agente (status = pendiente)<br/>+ nota privada en Chatwoot '⏳ Pendiente de revisión'"]
+    panel["<b>HM-ML · PANEL</b><br/>9. Una persona revisa la propuesta<br/>(sección del sidebar de Chatwoot)"]
+    q_cambio{"¿Cambió el texto?<br/>(lo decide el servidor)"}
+    aprobado["<b>Aprobar</b><br/>status = aprobado"]
+    editado["<b>Editar</b><br/>status = editado"]
+    guardar["<b>HM-ML</b><br/>10. Guarda el texto final y quién revisó<br/>(solo si la fila sigue pendiente)"]
+    nota_final["<b>CHATWOOT</b><br/>11. Nota privada con la respuesta final<br/>Si Chatwoot falla, la fila vuelve a pendiente"]
+    postear["<b>MERCADO LIBRE</b><br/>Publicar la respuesta aprobada<br/>PENDIENTE · hoy aprobar no publica nada"]
+
+    pregunta --> inbox
+    inbox -- dispara --> bot
+    bot -- pide / recibe contexto --> contexto
+    contexto --> apiml
+    apiml -- Respuestas --> jev
+    jev --> contexto
+    contexto -.- nota_ctx
+    bot -- envía contexto + pregunta --> agente
+    agente -- vehículo del comprador --> compat
+    compat --> autopartes
+    agente -- respuesta --> enviar
+    enviar --> q_rev
+    q_rev -- Sí --> pendiente
+    q_rev -- No --> q_pub
+    q_pub -- Sí --> publica
+    q_pub -- No --> privada_sin
+    pendiente --> panel
+    panel --> q_cambio
+    q_cambio -- No --> aprobado
+    q_cambio -- Sí --> editado
+    aprobado --> guardar
+    editado --> guardar
+    guardar --> nota_final
+    nota_final -. a futuro .-> postear
+
+    classDef ml fill:#fff3bf,stroke:#f08c00,color:#000
+    classDef cw fill:#d0ebff,stroke:#1c7ed6,color:#000
+    classDef fw fill:#e5dbff,stroke:#7048e8,color:#000
+    classDef api fill:#d3f9d8,stroke:#2f9e44,color:#000
+    classDef hm fill:#ffe8cc,stroke:#e8590c,color:#000
+    classDef ext fill:#e9ecef,stroke:#868e96,color:#000
+    class pregunta,postear ml
+    class inbox,bot,publica,privada_sin,nota_final cw
+    class agente fw
+    class contexto,compat,nota_ctx api
+    class enviar,q_rev,q_pub,pendiente,panel,q_cambio,aprobado,editado,guardar hm
+    class apiml,jev,autopartes ext
+```
+
+Colores: 🟨 Mercado Libre · 🟦 Chatwoot · 🟪 Framework de agentes · 🟩 API Repuestos Roma · 🟧 HM-ML · ⬜ Servicios externos.
+
 ## Variables de entorno
 
 Ver `.env.example`. Todas se leen **en runtime**: se cargan en el contenedor, no hace falta recompilar para cambiarlas.
