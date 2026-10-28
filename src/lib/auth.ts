@@ -121,20 +121,30 @@ export function embedAuthPage(): Response {
 <meta name="robots" content="noindex" />
 <title>HM-ML · Preguntas de Mercado Libre</title>
 <style>
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 15px system-ui, sans-serif; color: #475569; background: #f8fafc; }
+  /* Mismo fondo que el panel (global.css), para que no parpadee al entrar. */
+  :root { color-scheme: light dark; --bg: #f7f7f7; --text: #60646c; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1c1d20; --text: #b0b4ba; } }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 14px system-ui, sans-serif; color: var(--text); background: var(--bg); }
+  .spinner { width: 28px; height: 28px; border: 3px solid rgb(39 129 246 / 0.2); border-top-color: #2781f6; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+  #msg { margin: 0; padding: 0 24px; text-align: center; }
+  #msg:empty { display: none; }
+  .failed .spinner { display: none; }
 </style>
 </head>
 <body>
-<p id="msg">Validando sesión de Chatwoot…</p>
+<div class="spinner" role="status" aria-label="Cargando"></div>
+<p id="msg"></p>
 <script>
   const { origin, basic } = ${config};
   const RETRY_KEY = 'hmml_auth_retry';
   const msg = document.getElementById('msg');
-  const fail = (text) => { msg.textContent = text; };
+  const fail = (text) => { document.body.classList.add('failed'); msg.textContent = text; };
 
   if (window.parent === window) {
     if (basic) location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search));
-    else fail('Abrí este panel desde Chatwoot.');
+    else fail('Abrí este panel desde Chats Manager.');
   } else {
     // Si recién recargamos tras validar y seguimos sin sesión, el navegador está bloqueando la cookie.
     let recentRetry = false;
@@ -144,7 +154,7 @@ export function embedAuthPage(): Response {
     } catch {}
 
     let done = false;
-    const timeout = setTimeout(() => { if (!done) fail('Chatwoot no respondió. Recargá la página.'); }, 10000);
+    const timeout = setTimeout(() => { if (!done) fail('Chats Manager no respondió. Recargá la página.'); }, 10000);
 
     window.addEventListener('message', async (event) => {
       if (done || event.origin !== origin || event.data?.type !== 'AUTH_TOKEN') return;
@@ -153,14 +163,14 @@ export function embedAuthPage(): Response {
       if (recentRetry) return fail('El navegador bloqueó la cookie de sesión. Revisá la configuración de cookies de terceros.');
 
       const token = event.data.payload?.api_access_token;
-      if (!token) return fail('Chatwoot no envió credenciales. Recargá la página.');
+      if (!token) return fail('Chats Manager no envió credenciales. Recargá la página.');
 
       const res = await fetch('/auth/chatwoot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_access_token: token }),
       }).catch(() => null);
-      if (!res?.ok) return fail('Tu usuario de Chatwoot no tiene acceso a este panel.');
+      if (!res?.ok) return fail('Tu usuario de Chats Manager no tiene acceso a este panel.');
 
       try { sessionStorage.setItem(RETRY_KEY, String(Date.now())); } catch {}
       location.reload();

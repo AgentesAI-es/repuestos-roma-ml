@@ -102,7 +102,7 @@ export async function resolverRevision(
   if (conNota && !CHATWOOT_BOT_TOKEN) {
     throw new HttpError(
       500,
-      'Falta CHATWOOT_BOT_TOKEN: sin él no se puede dejar la nota de la revisión en Chatwoot.',
+      'Falta CHATWOOT_BOT_TOKEN: sin él no se puede dejar la nota de la revisión en Chats Manager.',
       'CHATWOOT_SIN_TOKEN',
     );
   }

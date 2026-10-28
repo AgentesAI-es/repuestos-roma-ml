@@ -41,12 +41,12 @@ export async function enviarMensaje({
       err instanceof Error && err.name === 'TimeoutError'
         ? `no respondió en ${CHATWOOT_TIMEOUT_MS} ms`
         : `inaccesible: ${err instanceof Error ? err.message : String(err)}`;
-    throw new HttpError(502, `Chatwoot ${motivo}`, 'CHATWOOT_ERROR');
+    throw new HttpError(502, `Chats Manager ${motivo}`, 'CHATWOOT_ERROR');
   }
 
   if (!r.ok) {
     const cuerpo = (await r.text()).slice(0, 200);
-    throw new HttpError(502, `Chatwoot respondió ${r.status}: ${cuerpo}`, 'CHATWOOT_ERROR');
+    throw new HttpError(502, `Chats Manager respondió ${r.status}: ${cuerpo}`, 'CHATWOOT_ERROR');
   }
 
   const mensaje = (await r.json()) as { id: number };

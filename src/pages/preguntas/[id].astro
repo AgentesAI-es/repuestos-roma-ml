@@ -168,7 +168,7 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
             {revisionOk && (
               <p class="system ok" role="status">
                 {revisionOk === 'editado'
-                  ? 'Respuesta editada. Quedó una nota privada en Chatwoot con el texto corregido.'
+                  ? 'Respuesta editada. Quedó una nota privada en Chats Manager con el texto corregido.'
                   : 'Respuesta aprobada.'}
               </p>
             )}
@@ -232,7 +232,7 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
       const edited = textarea.value.trim() !== original;
       submit.textContent = edited ? 'Enviar editada' : 'Aprobar';
       hint.textContent = edited
-        ? 'Queda como editada y deja una nota privada en Chatwoot con este texto.'
+        ? 'Queda como editada y deja una nota privada en Chats Manager con este texto.'
         : 'Si no la tocás, se aprueba tal cual. No publica nada en Mercado Libre.';
       autosize();
     };

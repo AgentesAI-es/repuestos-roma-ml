@@ -75,7 +75,7 @@ export const enviarRespuesta: Tool = {
     if (!token) {
       throw new HttpError(
         500,
-        'Sin token de Chatwoot: falta CHATWOOT_BOT_TOKEN y el contexto no trae bot_key',
+        'Sin token de Chats Manager: falta CHATWOOT_BOT_TOKEN y el contexto no trae bot_key',
         'CHATWOOT_SIN_TOKEN',
       );
     }
