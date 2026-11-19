@@ -1,7 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import AgentBadge from '../../components/AgentBadge.astro';
-import PublicationPanel from '../../components/PublicationPanel.astro';
+import SidePanel from '../../components/SidePanel.astro';
+import { getArticuloDePublicacion, type ResultadoArticulo } from '../../lib/server/articulo-api';
 import { ApiError, getBuyerHistory, getConnections, getQuestion } from '../../lib/ml-api';
 import { connectionName } from '../../lib/accounts';
 import { agentStatusOf, getAgentResponses, type AgentResponseMap } from '../../lib/agent-responses';
@@ -36,11 +37,15 @@ const connection = detail?.connection_id ?? connectionParam;
 
 // El historial y la respuesta del agente no dependen uno del otro. Un fallo
 // en cualquiera no rompe el detalle.
-const [historyResult, agentResult, connectionsResult] = await Promise.allSettled([
+// El artículo del ERP tampoco: getArticuloDePublicacion no tira.
+const [historyResult, agentResult, connectionsResult, articuloResult] = await Promise.allSettled([
   q && connection ? getBuyerHistory(connection, q) : Promise.resolve([] as Question[]),
   q ? getAgentResponses([q.id]) : Promise.resolve(new Map() as AgentResponseMap),
   getConnections(),
+  getArticuloDePublicacion(q?.item_id),
 ]);
+const articulo: ResultadoArticulo =
+  articuloResult.status === 'fulfilled' ? articuloResult.value : { estado: 'error', mensaje: 'Error inesperado.' };
 const history = historyResult.status === 'fulfilled' ? historyResult.value : null;
 if (historyResult.status === 'rejected') console.error('[pregunta] historial', historyResult.reason);
 const agentMap: AgentResponseMap = agentResult.status === 'fulfilled' ? agentResult.value : new Map();
@@ -100,7 +105,7 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
               <span class="strip-title">{detail?.item?.title ?? detail?.publication?.title ?? q.item_id}</span>
               <span class="strip-more muted">Ver publicación</span>
             </summary>
-            <PublicationPanel item={detail?.item} pub={detail?.publication} itemId={q.item_id} />
+            <SidePanel item={detail?.item} pub={detail?.publication} itemId={q.item_id} articulo={articulo} prefix="strip" />
           </details>
 
           <div class="messages" id="messages">
@@ -196,7 +201,7 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
         </section>
 
         <aside class="card side">
-          <PublicationPanel item={detail?.item} pub={detail?.publication} itemId={q.item_id} />
+          <SidePanel item={detail?.item} pub={detail?.publication} itemId={q.item_id} articulo={articulo} prefix="side" />
         </aside>
       </div>
     )
@@ -211,6 +216,29 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
     document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => avisar('detalle:cerrar')));
     if (new URLSearchParams(location.search).get('revision')) avisar('detalle:cambio');
   }
+
+  // Pestañas del panel lateral (Publicación ML / Artículo): clic y flechas.
+  document.querySelectorAll<HTMLElement>('[data-tabs]').forEach((root) => {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const select = (tab: HTMLButtonElement) => {
+      for (const t of tabs) {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        const panel = document.getElementById(t.getAttribute('aria-controls') ?? '');
+        if (panel) panel.hidden = !on;
+      }
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(tab));
+      tab.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        select(next);
+        next.focus();
+      });
+    });
+  });
 
   // Como un chat: arranca abajo, en la pregunta actual.
   const messages = document.getElementById('messages');
@@ -287,7 +315,7 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
   .strip-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
   .strip-more { flex: none; font-size: 12px; }
   .pub-strip[open] .strip-more { visibility: hidden; }
-  .pub-strip > :global(.pub) { padding: 4px 16px 14px; max-height: 45dvh; overflow-y: auto; }
+  .pub-strip > :global(.tabs) { padding: 4px 16px 14px; max-height: 45dvh; overflow-y: auto; }
   .pub-strip :global(.pub img) { max-width: 200px; }
 
   .messages {

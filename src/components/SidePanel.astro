@@ -1,0 +1,60 @@
+---
+import PublicationPanel from './PublicationPanel.astro';
+import ArticuloPanel from './ArticuloPanel.astro';
+import type { ItemSummary, Publication } from '../lib/types';
+import type { ResultadoArticulo } from '../lib/server/articulo-api';
+
+/**
+ * Panel lateral del detalle: la publicación de ML y el artículo del ERP en dos
+ * pestañas. Se usa dos veces (aside y desplegable en mobile): los ids van con
+ * `prefix` para no repetirse. El script del detalle cambia de pestaña.
+ */
+interface Props {
+  item: ItemSummary | null | undefined;
+  pub: Publication | null | undefined;
+  itemId: string | null;
+  articulo: ResultadoArticulo;
+  prefix: string;
+}
+
+const { item, pub, itemId, articulo, prefix } = Astro.props;
+const tabs = [
+  { id: `${prefix}-pub`, label: 'Publicación ML' },
+  { id: `${prefix}-art`, label: 'Artículo (ERP)' },
+];
+---
+
+<div class="tabs" data-tabs>
+  <div class="tablist" role="tablist">
+    {tabs.map((t, i) => (
+      <button type="button" role="tab" id={`${t.id}-tab`} aria-controls={t.id} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>
+        {t.label}
+      </button>
+    ))}
+  </div>
+  <div role="tabpanel" id={tabs[0].id} aria-labelledby={`${tabs[0].id}-tab`}>
+    <PublicationPanel item={item} pub={pub} itemId={itemId} />
+  </div>
+  <div role="tabpanel" id={tabs[1].id} aria-labelledby={`${tabs[1].id}-tab`} hidden>
+    <ArticuloPanel resultado={articulo} />
+  </div>
+</div>
+
+<style>
+  .tablist { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid rgb(var(--border-weak)); }
+  [role='tab'] {
+    flex: 1;
+    padding: 6px 8px 8px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  [role='tab']:hover { color: var(--text); }
+  [role='tab'][aria-selected='true'] { color: var(--text); border-bottom-color: var(--brand); }
+</style>
