@@ -34,6 +34,12 @@ export default defineConfig({
       ML_API_TOKEN: envField.string({ context: 'server', access: 'secret', optional: true }),
       ML_CONNECTION_ID: envField.string({ context: 'server', access: 'secret', optional: true }),
 
+      // API de Repuestos Roma (réplica del ERP): la pestaña "Artículo" del detalle.
+      // Vacía = la pestaña avisa que no está configurada; el resto anda igual.
+      REPUESTOS_ROMA_API_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
+      // Va en `x-api-key` (el `API_KEY` de esa API).
+      REPUESTOS_ROMA_API_KEY: envField.string({ context: 'server', access: 'secret', optional: true }),
+
       // Postgres propio: la tabla respuesta_agente (cola de revisión). Las
       // migraciones se aplican solas al primer uso. Vacío = panel sin datos del agente.
       DATABASE_URL: envField.string({ context: 'server', access: 'secret', optional: true }),

@@ -1,0 +1,92 @@
+---
+import { formatPrice } from '../lib/format';
+import type { ResultadoArticulo } from '../lib/server/articulo-api';
+
+interface Props {
+  resultado: ResultadoArticulo;
+}
+
+const { resultado } = Astro.props;
+const pub = resultado.estado === 'ok' ? resultado.publicacion : null;
+const a = pub?.articulo;
+// En el origen hay stock negativo: se muestra 0.
+const stock = a ? Math.max(a.stockTotal, 0) : 0;
+const depositos = Object.entries(a?.porDeposito ?? {});
+const precio = a ? formatPrice(a.precio, 'ARS') : '';
+
+const facts: [string, string][] = a
+  ? ([
+      ['Código', a.codigo],
+      ['Cód. proveedor', a.codigoProveedor ?? ''],
+      ['Marca', a.marca ?? ''],
+      ['Tipo', a.tipo ?? ''],
+      // Una sola marca por artículo; no es la compatibilidad.
+      ['Categoría de vehículo', a.vehiculo ?? ''],
+      ['Cuenta', pub!.cuenta],
+      ['Full', pub!.esFull ? 'Sí' : 'No'],
+    ].filter(([, v]) => v) as [string, string][])
+  : [];
+const textos: [string, string | null][] = a
+  ? [
+      ['Descripción adicional', a.descripcionAdicional],
+      ['Equivalencias', a.equivalencias],
+      ['Observaciones', a.observaciones],
+    ]
+  : [];
+---
+
+<div class="art">
+  {resultado.estado === 'sin_configurar' && <p class="muted">La API de Repuestos Roma no está configurada.</p>}
+  {resultado.estado === 'no_vinculado' && <p class="muted">Esta publicación no está vinculada a un artículo del ERP.</p>}
+  {resultado.estado === 'error' && <p class="err" role="alert">No se pudo consultar el artículo. {resultado.mensaje}</p>}
+  {
+    a && pub && (
+      <>
+        {!a.activo && <p class="warn">Dado de baja en el ERP: no se puede vender.</p>}
+        <h3>{a.descripcion}</h3>
+        <p class="price">
+          {precio || 'Sin precio'} <span class="muted">· lista {pub.listaCodigo}</span>
+        </p>
+        <dl>
+          <dt>Stock</dt>
+          <dd class:list={{ cero: stock === 0 }}>
+            {stock}
+            {depositos.length > 0 && <span class="muted"> ({depositos.map(([d, n]) => `${d}: ${n}`).join(' · ')})</span>}
+          </dd>
+          {facts.map(([k, v]) => (
+            <>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </>
+          ))}
+        </dl>
+        {textos
+          .filter(([, v]) => v)
+          .map(([k, v]) => (
+            <section class="texto">
+              <h4>{k}</h4>
+              <p>{v}</p>
+            </section>
+          ))}
+        <p class="nota muted">Réplica del ERP: puede tener algo de desfasaje.</p>
+      </>
+    )
+  }
+</div>
+
+<style>
+  .art p { margin: 0; font-size: 13px; }
+  h3 { font-size: 14px; font-weight: 500; margin: 0 0 4px; line-height: 1.45; overflow-wrap: anywhere; }
+  .art .price { font-size: 18px; font-weight: 600; margin: 0 0 12px; }
+  .price .muted { font-size: 12px; font-weight: 400; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
+  dt { color: var(--text-muted); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  dd.cero { color: var(--no); font-weight: 500; }
+  .texto { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgb(var(--border-weak)); }
+  h4 { margin: 0 0 4px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .texto p { font-size: 12px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+  .art .warn { margin-bottom: 10px; padding: 6px 10px; border-radius: 6px; background: rgb(var(--alpha-2)); color: var(--no); font-weight: 500; }
+  .art .err { color: var(--no); }
+  .art .nota { margin-top: 14px; font-size: 11px; }
+</style>

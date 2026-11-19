@@ -91,6 +91,8 @@ Ver `.env.example`. Todas se leen **en runtime**: se cargan en el contenedor, no
 | `ALLOWED_DOMAINS`     | Dominio del panel detrás de Traefik, o un comodín (`**.example.com`); varios separados por coma. **Se lee al compilar** (build arg): cambiarlo pide rebuild. Default del compose: `**.agentesai.es` |
 | `ML_API_TOKEN`        | `API_BEARER_TOKEN` de la API de ML (**obligatoria**)               |
 | `ML_CONNECTION_ID`    | Cuenta ML por defecto si hay varias (opcional)                     |
+| `REPUESTOS_ROMA_API_URL` | URL de la API de Repuestos Roma (réplica del ERP), para la pestaña **Artículo** del detalle. Vacía = la pestaña avisa que no está configurada |
+| `REPUESTOS_ROMA_API_KEY` | `API_KEY` de esa API; va en `x-api-key`                         |
 | `POSTGRES_PASSWORD`   | Contraseña de la base del compose (**obligatoria**; solo letras y números: va dentro de `DATABASE_URL`) |
 | `POSTGRES_USER` / `POSTGRES_DB` | Opcionales (`hmml` / `hmml`)                             |
 | `DATABASE_URL`        | La arma el compose con lo anterior. En `npm run dev`, cargarla a mano. Vacía = panel sin datos del agente |
