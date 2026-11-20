@@ -36,7 +36,7 @@ const textos: [string, string | null][] = a
 ---
 
 <div class="art">
-  {resultado.estado === 'sin_configurar' && <p class="muted">La API de Repuestos Roma no está configurada.</p>}
+  {resultado.estado === 'sin_configurar' && <p class="muted">La API del ERP no está configurada.</p>}
   {resultado.estado === 'no_vinculado' && <p class="muted">Esta publicación no está vinculada a un artículo del ERP.</p>}
   {resultado.estado === 'error' && <p class="err" role="alert">No se pudo consultar el artículo. {resultado.mensaje}</p>}
   {

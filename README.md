@@ -19,12 +19,12 @@ flowchart TD
     pregunta["<b>MERCADO LIBRE</b><br/>1. El comprador pregunta en una publicación"]
     inbox["<b>CHATWOOT</b><br/>2. Entra a la inbox de ML como conversación<br/>(meli_item_id, buyer_id, question_id)"]
     bot["<b>CHATWOOT</b><br/>3. Bot de Chatwoot<br/>junta los datos de la pregunta y pide el contexto"]
-    contexto["<b>API REPUESTOS ROMA</b><br/>4. GET /v1/publicaciones-ml/{id}/contexto"]
+    contexto["<b>API ERP</b><br/>4. GET /v1/publicaciones-ml/{id}/contexto"]
     nota_ctx>"<b>Qué trae el contexto</b><br/>• artículo del ERP: precio, stock, si está de baja<br/>• preguntas anteriores del comprador<br/>• ficha de ML (marca, nro. de pieza)<br/>• respuestas relacionadas<br/>Cada parte falla sola: siempre responde 200"]
     apiml["<b>API de ML</b><br/>historial del comprador · ficha de la publicación · respuestas a otros compradores"]
     jev["<b>OpenRouter · Jev</b><br/>elige las respuestas relacionadas que sirven (hasta 5)"]
     agente["<b>FRAMEWORK DE AGENTES</b><br/>5. Agente<br/>recibe contexto + pregunta del bot"]
-    compat["<b>API REPUESTOS ROMA</b><br/>6. Tool consultar_compatibilidad (opcional)<br/>POST /v1/tool-execution"]
+    compat["<b>API ERP</b><br/>6. Tool consultar_compatibilidad (opcional)<br/>POST /v1/tool-execution"]
     autopartes["<b>API de autopartes</b><br/>veredicto: compatible · incompleto · incompatible"]
     enviar["<b>HM-ML</b><br/>7. Tool enviar_respuesta<br/>POST /api/tool-execution<br/>{ respuesta, revision }"]
     q_rev{"¿revision: true?"}
@@ -79,7 +79,7 @@ flowchart TD
     class apiml,jev,autopartes ext
 ```
 
-Colores: 🟨 Mercado Libre · 🟦 Chatwoot · 🟪 Framework de agentes · 🟩 API Repuestos Roma · 🟧 HM-ML · ⬜ Servicios externos.
+Colores: 🟨 Mercado Libre · 🟦 Chatwoot · 🟪 Framework de agentes · 🟩 API ERP · 🟧 HM-ML · ⬜ Servicios externos.
 
 ## Variables de entorno
 
@@ -91,8 +91,8 @@ Ver `.env.example`. Todas se leen **en runtime**: se cargan en el contenedor, no
 | `ALLOWED_DOMAINS`     | Dominio del panel detrás de Traefik, o un comodín (`**.example.com`); varios separados por coma. **Se lee al compilar** (build arg): cambiarlo pide rebuild. Default del compose: `**.agentesai.es` |
 | `ML_API_TOKEN`        | `API_BEARER_TOKEN` de la API de ML (**obligatoria**)               |
 | `ML_CONNECTION_ID`    | Cuenta ML por defecto si hay varias (opcional)                     |
-| `REPUESTOS_ROMA_API_URL` | URL de la API de Repuestos Roma (réplica del ERP), para la pestaña **Artículo** del detalle. Vacía = la pestaña avisa que no está configurada |
-| `REPUESTOS_ROMA_API_KEY` | `API_KEY` de esa API; va en `x-api-key`                         |
+| `ERP_API_URL` | URL de la API del ERP (una réplica), para la pestaña **Artículo** del detalle. Vacía = la pestaña avisa que no está configurada |
+| `ERP_API_KEY` | `API_KEY` de esa API; va en `x-api-key`                         |
 | `POSTGRES_PASSWORD`   | Contraseña de la base del compose (**obligatoria**; solo letras y números: va dentro de `DATABASE_URL`) |
 | `POSTGRES_USER` / `POSTGRES_DB` | Opcionales (`hmml` / `hmml`)                             |
 | `DATABASE_URL`        | La arma el compose con lo anterior. En `npm run dev`, cargarla a mano. Vacía = panel sin datos del agente |
