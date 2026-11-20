@@ -7,7 +7,7 @@ const { getArticuloDePublicacion } = await import('./articulo-api');
 
 const publicacion = {
   id: 'MLA704095902',
-  cuenta: 'ROMA2',
+  cuenta: 'CUENTA1',
   listaCodigo: 'LM',
   esFull: false,
   articulo: {
@@ -32,7 +32,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   resetEnv();
-  setEnv({ REPUESTOS_ROMA_API_URL: 'https://roma.example.com', REPUESTOS_ROMA_API_KEY: 'clave-roma' });
+  setEnv({ ERP_API_URL: 'https://erp.example.com', ERP_API_KEY: 'clave-erp' });
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -46,8 +46,8 @@ test('pide la publicación por item_id con la api key y devuelve el artículo', 
   const r = await getArticuloDePublicacion('MLA704095902');
   expect(r).toEqual({ estado: 'ok', publicacion });
   const [url, init] = fetchMock.mock.calls[0];
-  expect(String(url)).toBe('https://roma.example.com/v1/publicaciones-ml/MLA704095902');
-  expect(init.headers['x-api-key']).toBe('clave-roma');
+  expect(String(url)).toBe('https://erp.example.com/v1/publicaciones-ml/MLA704095902');
+  expect(init.headers['x-api-key']).toBe('clave-erp');
 });
 
 test('404: la publicación no está vinculada a un artículo del ERP', async () => {
@@ -68,7 +68,7 @@ test('API caída: error de conexión, no tira', async () => {
 });
 
 test('sin URL configurada: no llama a la API', async () => {
-  setEnv({ REPUESTOS_ROMA_API_URL: undefined });
+  setEnv({ ERP_API_URL: undefined });
   expect(await getArticuloDePublicacion('MLA1')).toEqual({ estado: 'sin_configurar' });
   expect(fetchMock).not.toHaveBeenCalled();
 });

@@ -19,8 +19,8 @@ export let CHATWOOT_TIMEOUT_MS: number;
 export let ML_RESPUESTA_PUBLICA: boolean;
 export let ML_API_URL: string;
 export let ML_API_TOKEN: string | undefined;
-export let REPUESTOS_ROMA_API_URL: string | undefined;
-export let REPUESTOS_ROMA_API_KEY: string | undefined;
+export let ERP_API_URL: string | undefined;
+export let ERP_API_KEY: string | undefined;
 
 interface Env {
   DATABASE_URL?: string;
@@ -29,8 +29,8 @@ interface Env {
   CHATWOOT_BOT_TOKEN?: string;
   CHATWOOT_TIMEOUT_MS?: number;
   ML_RESPUESTA_PUBLICA?: boolean;
-  REPUESTOS_ROMA_API_URL?: string;
-  REPUESTOS_ROMA_API_KEY?: string;
+  ERP_API_URL?: string;
+  ERP_API_KEY?: string;
 }
 
 export function setEnv(v: Env) {
@@ -40,8 +40,8 @@ export function setEnv(v: Env) {
   if ('CHATWOOT_BOT_TOKEN' in v) CHATWOOT_BOT_TOKEN = v.CHATWOOT_BOT_TOKEN;
   if ('CHATWOOT_TIMEOUT_MS' in v) CHATWOOT_TIMEOUT_MS = v.CHATWOOT_TIMEOUT_MS!;
   if ('ML_RESPUESTA_PUBLICA' in v) ML_RESPUESTA_PUBLICA = v.ML_RESPUESTA_PUBLICA!;
-  if ('REPUESTOS_ROMA_API_URL' in v) REPUESTOS_ROMA_API_URL = v.REPUESTOS_ROMA_API_URL;
-  if ('REPUESTOS_ROMA_API_KEY' in v) REPUESTOS_ROMA_API_KEY = v.REPUESTOS_ROMA_API_KEY;
+  if ('ERP_API_URL' in v) ERP_API_URL = v.ERP_API_URL;
+  if ('ERP_API_KEY' in v) ERP_API_KEY = v.ERP_API_KEY;
 }
 
 export function resetEnv() {
@@ -53,8 +53,8 @@ export function resetEnv() {
   ML_RESPUESTA_PUBLICA = false;
   ML_API_URL = 'https://ml.example.com';
   ML_API_TOKEN = undefined;
-  REPUESTOS_ROMA_API_URL = undefined;
-  REPUESTOS_ROMA_API_KEY = undefined;
+  ERP_API_URL = undefined;
+  ERP_API_KEY = undefined;
 }
 
 resetEnv();
