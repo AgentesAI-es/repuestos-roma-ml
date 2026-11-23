@@ -6,7 +6,7 @@ import { countQuestions } from '../ml-api';
  *
  *   sinResponder  total de ML con status UNANSWERED
  *   respondidas   total de ML con status ANSWERED
- *   pendientes    filas `pendiente` de esa cuenta en la tabla de revisión
+ *   pendientes    filas `pendiente` de esa cuenta, sin las que ML ya marca respondidas
  *
  * Cada uno falla por separado (queda `null` y la UI muestra "—").
  *

@@ -9,6 +9,7 @@
  * Sin DATABASE_URL no hay datos del agente: el panel muestra solo lo de ML.
  */
 import { dbConfigurada } from './server/db';
+import { getQuestionCacheada } from './server/ml-cache';
 import { listarRespuestas, type FilaRevision } from './server/revision-db';
 import type { AgentResponse, AgentStatus, Question } from './types';
 
@@ -34,14 +35,45 @@ export function isAgentStatus(value: string | null | undefined): value is AgentS
 }
 
 /**
- * Pendiente si la fila está pendiente; respondida si se aprobó o editó, o si ML ya la
- * marca respondida (alguien contestó directo en ML); el resto, sin responder.
+ * Respondida si ML ya la marca respondida (alguien contestó directo en ML: la
+ * propuesta pendiente del agente ya no sirve) o si se aprobó o editó; pendiente
+ * si la fila está pendiente; el resto, sin responder.
  */
 export function agentStatusOf(map: AgentResponseMap, question: Pick<Question, 'id' | 'status'>): AgentStatus {
   const response = map.get(question.id);
+  if (question.status === 'ANSWERED' || response?.status === 'aprobado' || response?.status === 'editado') return 'respondida';
   if (response?.status === 'pendiente') return 'pendiente';
-  if (response?.status === 'aprobado' || response?.status === 'editado' || question.status === 'ANSWERED') return 'respondida';
   return 'sin_responder';
+}
+
+/** Milisegundos de una fecha ISO; NaN si no hay o no se entiende. */
+const ms = (iso: string | null | undefined) => (iso ? Date.parse(iso) : Number.NaN);
+
+/**
+ * Filtra por desde/hasta y ordena por `date_created`. Compara instantes y no
+ * texto: ML manda las fechas con su offset (`-04:00`) y los filtros vienen en
+ * UTC (`Z`), así que el orden de los strings no es el de las fechas. Las que no
+ * tienen fecha van al final. `sinRespondidas` saca las que ML ya marca respondidas.
+ */
+export function ordenarParaRevisar<T extends Pick<Question, 'date_created' | 'status'>>(
+  questions: T[],
+  { sort, desde, hasta, sinRespondidas = false }: { sort: 'asc' | 'desc'; desde?: string; hasta?: string; sinRespondidas?: boolean },
+): T[] {
+  const min = ms(desde);
+  const max = ms(hasta);
+  return questions
+    .filter((q) => !sinRespondidas || q.status !== 'ANSWERED')
+    .filter((q) => {
+      const t = ms(q.date_created);
+      if (Number.isNaN(t)) return !desde && !hasta;
+      return !(t < min) && !(t > max);
+    })
+    .sort((a, b) => {
+      const ta = ms(a.date_created);
+      const tb = ms(b.date_created);
+      if (Number.isNaN(ta) || Number.isNaN(tb)) return Number.isNaN(ta) ? (Number.isNaN(tb) ? 0 : 1) : -1;
+      return (ta - tb) * (sort === 'asc' ? 1 : -1);
+    });
 }
 
 export function agentSource(): 'db' | 'none' {
@@ -76,13 +108,20 @@ export async function getAgentResponses(questionIds: number[]): Promise<AgentRes
 }
 
 /**
- * Cuántas respuestas pendientes de revisión tiene una cuenta de ML. `null` si
- * no hay base (la UI muestra "—", no un cero falso). Tira si la base falla.
+ * Cuántas respuestas pendientes de revisión tiene una cuenta de ML, sin las que
+ * ML ya marca respondidas (alguien contestó directo en ML: no hay nada que
+ * revisar). Es lo que muestra "Para revisar", sin importar los filtros de fecha.
+ * Mira el detalle de cada una en el caché de ML (el mismo que usa la pestaña);
+ * si ML falla para una, se cuenta igual. `null` si no hay base (la UI muestra
+ * "—", no un cero falso). Tira si la base falla.
  */
-export async function countPending(connectionId: number): Promise<number | null> {
+export async function countPending(connectionId: number, opciones?: { forzar?: boolean }): Promise<number | null> {
   if (agentSource() === 'none') return null;
-  const { total } = await listarRespuestas({ statuses: ['pendiente'], meliConnectionId: connectionId, limite: 0 });
-  return total;
+  const filas = await listByStatus(connectionId, ['pendiente']);
+  const estados = await Promise.allSettled(
+    filas.map((f) => getQuestionCacheada(f.questionId!, connectionId, opciones)),
+  );
+  return estados.filter((e) => e.status === 'rejected' || e.value.question.status !== 'ANSWERED').length;
 }
 
 /**

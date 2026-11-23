@@ -12,6 +12,7 @@ import {
   getAgentResponses,
   isAgentStatus,
   listByStatus,
+  ordenarParaRevisar,
 } from '../lib/agent-responses';
 import { dayToIso } from '../lib/format';
 import type { AgentResponse, AgentStatus, Connection, QuestionListItem } from '../lib/types';
@@ -78,13 +79,17 @@ try {
   connectionId = resolveConnectionId(connections, Number(params.get('connection')));
 
   if (connectionId) {
-    pendingCount = await countPending(connectionId).catch(() => null);
+    // Sin las que ya se respondieron en ML ni los filtros de fecha: lo que de verdad falta revisar.
+    pendingCount = await countPending(connectionId, { forzar }).catch(() => null);
     // Sin pestaña elegida, se abre donde hay trabajo: revisar si hay pendientes.
+    // Con 0 (todas respondidas en ML) se abre "Sin responder" y no una lista vacía.
     if (!tabElegida && pendingCount) tab = 'pendiente';
 
     const tableStatuses = TAB_STATUSES[tab];
     if (tableStatuses && agentSource() === 'db') {
-      ({ questions, total, failedDetails } = await loadFromTable(connectionId, tableStatuses));
+      // countPending ya trajo de nuevo las pendientes: "Actualizar" no las vuelve a pedir.
+      const yaForzadas = tab === 'pendiente' && pendingCount !== null;
+      ({ questions, total, failedDetails } = await loadFromTable(connectionId, tableStatuses, forzar && !yaForzadas));
     } else {
       const data = await listQuestionsCacheada(
         {
@@ -124,16 +129,21 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 const shown = totalPages === 1 ? visible.length : total;
 
 /** Las filas de la tabla de la cuenta, con fechas y orden aplicados acá (no pasan por el filtro de ML). */
-async function loadFromTable(connection: number, statuses: AgentResponse['status'][]) {
+async function loadFromTable(connection: number, statuses: AgentResponse['status'][], forzarDetalles: boolean) {
   const rows = await listByStatus(connection, statuses);
-  const details = await Promise.allSettled(rows.map((r) => getQuestionCacheada(r.questionId!, connection, { forzar })));
-  const desde = dayToIso(from);
-  const hasta = dayToIso(to, true);
-  const all = details
-    .filter((d) => d.status === 'fulfilled')
-    .map((d) => ({ ...d.value.question, publication: d.value.publication }) as QuestionListItem)
-    .filter((q) => (!desde || (q.date_created ?? '') >= desde) && (!hasta || (q.date_created ?? '') <= hasta))
-    .sort((a, b) => (a.date_created ?? '').localeCompare(b.date_created ?? '') * (sort === 'asc' ? 1 : -1));
+  const details = await Promise.allSettled(rows.map((r) => getQuestionCacheada(r.questionId!, connection, { forzar: forzarDetalles })));
+  const all = ordenarParaRevisar(
+    details
+      .filter((d) => d.status === 'fulfilled')
+      .map((d) => ({ ...d.value.question, publication: d.value.publication }) as QuestionListItem),
+    {
+      sort,
+      desde: dayToIso(from),
+      hasta: dayToIso(to, true),
+      // Para revisar: si ya se respondió en ML, la propuesta del agente no se muestra.
+      sinRespondidas: statuses.includes('pendiente'),
+    },
+  );
   return {
     questions: all.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     total: all.length,
