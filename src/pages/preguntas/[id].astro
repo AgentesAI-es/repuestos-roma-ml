@@ -144,7 +144,7 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
               </div>
             )}
 
-            {agent?.status === 'pendiente' && (
+            {agentStatus === 'pendiente' && agent?.status === 'pendiente' && (
               <div class="msg seller-msg agent pendiente">
                 <span class="who">⏳ Propuesta del agente</span>
                 <p>{agent.respuestaPropuesta}</p>
@@ -179,7 +179,7 @@ const days = [...(history ?? []), ...(q ? [q] : [])].map((m) => dayOf(m.date_cre
             )}
           </div>
 
-          {agent?.status === 'pendiente' && (
+          {agentStatus === 'pendiente' && agent?.status === 'pendiente' && (
             <form method="post" action="/api/revision" class="composer" data-original={agent.respuestaPropuesta}>
               {revisionError && (
                 <p class="composer-error" role="alert"><strong>No se pudo guardar.</strong> {revisionError}</p>
